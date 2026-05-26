@@ -26,7 +26,7 @@ OGQ 제출용 이미지로 변환하고, 검수 후 ZIP 파일로 다운로드�
 ```
 
 <br />
-##🧸 개발 목적
+## 🧸 개발 목적
 
 이 프로젝트는 단순 예제 프로젝트가 아니라,
 실제로 필요하다고 느낀 기능을 직접 기획하고 구현해보기 위해 시작했습니다.
@@ -42,7 +42,8 @@ MySQL 데이터 저장 프로젝트, 업로드 이미지, 변환 이미지 정�
 QA 관점 검증 정상/예외/경계값 테스트 경험
 MVP 완성 핵심 기능이 작동하는 최소 서비스 구현
 <br />
-##✨ 주요 기능
+
+## ✨ 주요 기능
 
 1. 프로젝트 생성
 
@@ -202,7 +203,9 @@ ketokki-sticker-maker
 ├─ .gitignore
 └─ README.md
 <br />
-🔌 API 목록
+
+## 🔌 API 목록
+
 기능 Method URL
 프로젝트 생성 POST /api/projects
 이미지 업로드 POST /api/projects/{projectId}/images
