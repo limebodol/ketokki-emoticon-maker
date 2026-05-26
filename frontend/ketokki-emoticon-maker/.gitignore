@@ -1,0 +1,63 @@
+# =========================
+# Ketokki Sticker Maker
+# =========================
+
+# Uploaded / generated files
+storage/uploads/
+storage/converted/
+storage/zips/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.iml
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Eclipse / STS
+.project
+.classpath
+.settings/
+
+# Java / Spring Boot build
+target/
+bin/
+build/
+out/
+
+# Maven wrapper cache
+.mvn/wrapper/maven-wrapper.jar
+
+# Environment / secrets
+.env
+.env.*
+application-secret.properties
+application-local.properties
+
+# Node / React
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+frontend/**/node_modules/
+frontend/**/dist/
+frontend/**/.vite/
+frontend/**/coverage/
