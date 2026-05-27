@@ -2,7 +2,9 @@
 
 <br />
 
+<img src="https://capsule-render.vercel.app/api?type=soft&color=FFDEE9,FDEB71,B5EAEA,DCC6FF&height=180&section=header&text=Ketokki%20Emoticon%20Maker&fontSize=42&fontColor=5F4D62&animation=twinkling&fontAlignY=45&desc=AI%20character%20image%20to%20platform-ready%20sticker%20files&descSize=16&descAlignY=70" />
 
+<br />
 
 # 🐰 케토끼 이모티콘 메이커
 
@@ -18,7 +20,7 @@
 
 <br />
 
-<img src="https://readme-typing-svg.demolab.com?font=Gaegu&size=28&pause=900&color=E86F92&center=true&vCenter=true&width=700&lines=%F0%9F%8C%B7+이미지를+넣으면+제출용+파일로+정리해요;%F0%9F%90%B0+플랫폼별+규격+변환부터+ZIP+다운로드까지;%F0%9F%8E%80+아기자기한+이모티콘+제작+보조+도구" alt="typing animation" />
+<img src="https://readme-typing-svg.demolab.com?font=Gaegu&size=28&pause=900&color=E86F92&center=true&vCenter=true&width=700&lines=%F0%9F%8C%B7+%EC%9D%B4%EB%AF%B8%EC%A7%80%EB%A5%BC+%EB%84%A3%EC%9C%BC%EB%A9%B4+%EC%A0%9C%EC%B6%9C%EC%9A%A9+%ED%8C%8C%EC%9D%BC%EB%A1%9C+%EC%A0%95%EB%A6%AC%ED%95%B4%EC%9A%94;%F0%9F%90%B0+%ED%94%8C%EB%9E%AB%ED%8F%BC%EB%B3%84+%EA%B7%9C%EA%B2%A9+%EB%B3%80%ED%99%98%EB%B6%80%ED%84%B0+ZIP+%EB%8B%A4%EC%9A%B4%EB%A1%9C%EB%93%9C%EA%B9%8C%EC%A7%80;%F0%9F%8E%80+%EC%95%84%EA%B8%B0%EC%9E%90%EA%B8%B0%ED%95%9C+%EC%9D%B4%EB%AA%A8%ED%8B%B0%EC%BD%98+%EC%A0%9C%EC%9E%91+%EB%B3%B4%EC%A1%B0+%EB%8F%84%EA%B5%AC" alt="typing animation" />
 
 <br />
 
@@ -32,13 +34,7 @@
 <br />
 <br />
 
-<img src="https://capsule-render.vercel.app/api?type=soft&color=FFDEE9,FDEB71,B5EAEA,DCC6FF&height=180&section=header&text=Ketokki%20Emoticon%20Maker&fontSize=42&fontColor=5F4D62&animation=twinkling&fontAlignY=45&desc=AI%20character%20image%20to%20platform-ready%20sticker%20files&descSize=16&descAlignY=70" />
-
-<br />
-<br />
-
 </div>
-
 
 ---
 
