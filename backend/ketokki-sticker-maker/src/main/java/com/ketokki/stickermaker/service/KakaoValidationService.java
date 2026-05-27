@@ -15,20 +15,21 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class OgqValidationService {
+public class KakaoValidationService {
 
     private final ConvertedImageRepository convertedImageRepository;
     private final PlatformSpecService platformSpecService;
 
-    public OgqValidationResponse validateOgq(Long projectId) {
-        PlatformSpec spec = platformSpecService.getSpec("OGQ");
+    public OgqValidationResponse validateKakao(Long projectId) {
+        PlatformSpec spec = platformSpecService.getSpec("KAKAO");
+        String platformKey = spec.getSubmissionType();
 
         List<ValidationItem> items = new ArrayList<>();
 
         List<ConvertedImage> stickerImages =
                 convertedImageRepository.findByProjectIdAndPlatformNameAndItemTypeOrderBySortOrderAsc(
                         projectId,
-                        spec.getPlatformName(),
+                        platformKey,
                         "STICKER"
                 );
 
@@ -49,14 +50,14 @@ public class OgqValidationService {
         Optional<ConvertedImage> mainImage =
                 convertedImageRepository.findByProjectIdAndPlatformNameAndItemType(
                         projectId,
-                        spec.getPlatformName(),
+                        platformKey,
                         "MAIN"
                 );
 
         Optional<ConvertedImage> tabImage =
                 convertedImageRepository.findByProjectIdAndPlatformNameAndItemType(
                         projectId,
-                        spec.getPlatformName(),
+                        platformKey,
                         "TAB"
                 );
 
@@ -92,10 +93,10 @@ public class OgqValidationService {
         boolean valid = actualCount == expectedCount;
 
         items.add(new ValidationItem(
-                spec.getPlatformName() + " 스티커 개수",
+                "KAKAO 스티커 개수",
                 "STICKER_COUNT",
                 valid,
-                valid ? "스티커 개수 정상" : "스티커 개수가 부족하거나 많습니다.",
+                valid ? "스티커 개수 정상" : "KAKAO 정지형 이모티콘은 32개가 필요합니다.",
                 expectedCount + "개",
                 actualCount + "개"
         ));
@@ -225,7 +226,7 @@ public class OgqValidationService {
 
         OgqValidationResponse response = new OgqValidationResponse();
         response.setProjectId(projectId);
-        response.setPlatformName(spec.getPlatformName());
+        response.setPlatformName(spec.getSubmissionType());
         response.setTotalCount(totalCount);
         response.setSuccessCount(successCount);
         response.setFailCount(failCount);
@@ -238,9 +239,14 @@ public class OgqValidationService {
 
     private String formatFileSize(long sizeBytes) {
         long oneMb = 1024L * 1024L;
+        long oneKb = 1024L;
 
         if (sizeBytes % oneMb == 0) {
             return (sizeBytes / oneMb) + "MB";
+        }
+
+        if (sizeBytes % oneKb == 0) {
+            return (sizeBytes / oneKb) + "KB";
         }
 
         return sizeBytes + " bytes";

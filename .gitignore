@@ -63,3 +63,9 @@ frontend/**/coverage/
 # Eclipse workspace metadata
 backend/.metadata/
 .metadata/
+
+# Gradle
+.gradle/
+
+# ZIP generated files
+*.zip

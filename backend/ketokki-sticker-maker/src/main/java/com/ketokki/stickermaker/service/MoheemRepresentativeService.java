@@ -18,7 +18,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class OgqRepresentativeService {
+public class MoheemRepresentativeService {
 
     private final ConvertedImageRepository convertedImageRepository;
     private final PlatformSpecService platformSpecService;
@@ -27,15 +27,20 @@ public class OgqRepresentativeService {
     private String convertedDir;
 
     @Transactional
-    public OgqRepresentativeResponse createRepresentativeImages(Long projectId, Integer selectedOrder) {
-        PlatformSpec spec = platformSpecService.getSpec("OGQ");
+    public OgqRepresentativeResponse createRepresentativeImages(
+            Long projectId,
+            String specKey,
+            Integer selectedOrder
+    ) {
+        PlatformSpec spec = platformSpecService.getSpec(specKey);
+        String platformKey = spec.getSubmissionType();
 
-        validateSelectedOrder(projectId, selectedOrder, spec);
+        validateSelectedOrder(projectId, selectedOrder, spec, platformKey);
 
         ConvertedImage selectedSticker = convertedImageRepository
                 .findByProjectIdAndPlatformNameAndItemTypeAndSortOrder(
                         projectId,
-                        spec.getPlatformName(),
+                        platformKey,
                         "STICKER",
                         selectedOrder
                 )
@@ -73,21 +78,13 @@ public class OgqRepresentativeService {
                     spec.getMainHeight()
             );
 
-            BufferedImage tabImageBuffered = ImageResizeUtil.resizeToCanvas(
-                    original,
-                    spec.getTabWidth(),
-                    spec.getTabHeight()
-            );
-
             File mainFile = new File(platformDir, "main.png");
-            File tabFile = new File(platformDir, "tab.png");
 
             ImageIO.write(mainImageBuffered, "png", mainFile);
-            ImageIO.write(tabImageBuffered, "png", tabFile);
 
             ConvertedImage mainImage = saveOrUpdateRepresentative(
                     projectId,
-                    spec,
+                    platformKey,
                     "MAIN",
                     "main.png",
                     mainFile,
@@ -96,32 +93,22 @@ public class OgqRepresentativeService {
                     selectedOrder
             );
 
-            ConvertedImage tabImage = saveOrUpdateRepresentative(
-                    projectId,
-                    spec,
-                    "TAB",
-                    "tab.png",
-                    tabFile,
-                    spec.getTabWidth(),
-                    spec.getTabHeight(),
-                    selectedOrder
-            );
-
             OgqRepresentativeResponse response = new OgqRepresentativeResponse();
             response.setMainImage(mainImage);
-            response.setTabImage(tabImage);
+            response.setTabImage(null);
 
             return response;
 
         } catch (Exception e) {
-            throw new RuntimeException("대표 이미지 생성 실패: " + e.getMessage(), e);
+            throw new RuntimeException("MOHEEM 대표 이미지 생성 실패: " + e.getMessage(), e);
         }
     }
 
     private void validateSelectedOrder(
             Long projectId,
             Integer selectedOrder,
-            PlatformSpec spec
+            PlatformSpec spec,
+            String platformKey
     ) {
         if (selectedOrder == null) {
             throw new RuntimeException("대표컷 번호가 없습니다.");
@@ -136,16 +123,14 @@ public class OgqRepresentativeService {
         List<ConvertedImage> stickerImages =
                 convertedImageRepository.findByProjectIdAndPlatformNameAndItemTypeOrderBySortOrderAsc(
                         projectId,
-                        spec.getPlatformName(),
+                        platformKey,
                         "STICKER"
                 );
 
         if (stickerImages.isEmpty()) {
             throw new RuntimeException(
-                    spec.getPlatformName()
-                            + " 변환된 스티커 이미지가 없습니다. 먼저 "
-                            + spec.getPlatformName()
-                            + " 변환을 진행해주세요."
+                    spec.getSubmissionType()
+                            + " 변환된 스티커 이미지가 없습니다. 먼저 변환을 진행해주세요."
             );
         }
 
@@ -165,17 +150,14 @@ public class OgqRepresentativeService {
 
         if (!exists) {
             throw new RuntimeException(
-                    "선택한 번호의 "
-                            + spec.getPlatformName()
-                            + " 스티커 이미지가 없습니다. 선택 번호: "
-                            + selectedOrder
+                    "선택한 번호의 스티커 이미지가 없습니다. 선택 번호: " + selectedOrder
             );
         }
     }
 
     private ConvertedImage saveOrUpdateRepresentative(
             Long projectId,
-            PlatformSpec spec,
+            String platformKey,
             String itemType,
             String fileName,
             File file,
@@ -186,14 +168,14 @@ public class OgqRepresentativeService {
         Optional<ConvertedImage> existing = convertedImageRepository
                 .findByProjectIdAndPlatformNameAndItemType(
                         projectId,
-                        spec.getPlatformName(),
+                        platformKey,
                         itemType
                 );
 
         ConvertedImage convertedImage = existing.orElse(new ConvertedImage());
 
         convertedImage.setProjectId(projectId);
-        convertedImage.setPlatformName(spec.getPlatformName());
+        convertedImage.setPlatformName(platformKey);
         convertedImage.setItemType(itemType);
         convertedImage.setConvertedFileName(fileName);
         convertedImage.setConvertedFilePath(file.getAbsolutePath());

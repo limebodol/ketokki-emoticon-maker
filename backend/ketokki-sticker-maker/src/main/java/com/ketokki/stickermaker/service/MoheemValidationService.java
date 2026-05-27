@@ -15,20 +15,21 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class OgqValidationService {
+public class MoheemValidationService {
 
     private final ConvertedImageRepository convertedImageRepository;
     private final PlatformSpecService platformSpecService;
 
-    public OgqValidationResponse validateOgq(Long projectId) {
-        PlatformSpec spec = platformSpecService.getSpec("OGQ");
+    public OgqValidationResponse validateMoheem(Long projectId, String specKey) {
+        PlatformSpec spec = platformSpecService.getSpec(specKey);
+        String platformKey = spec.getSubmissionType();
 
         List<ValidationItem> items = new ArrayList<>();
 
         List<ConvertedImage> stickerImages =
                 convertedImageRepository.findByProjectIdAndPlatformNameAndItemTypeOrderBySortOrderAsc(
                         projectId,
-                        spec.getPlatformName(),
+                        platformKey,
                         "STICKER"
                 );
 
@@ -49,15 +50,8 @@ public class OgqValidationService {
         Optional<ConvertedImage> mainImage =
                 convertedImageRepository.findByProjectIdAndPlatformNameAndItemType(
                         projectId,
-                        spec.getPlatformName(),
+                        platformKey,
                         "MAIN"
-                );
-
-        Optional<ConvertedImage> tabImage =
-                convertedImageRepository.findByProjectIdAndPlatformNameAndItemType(
-                        projectId,
-                        spec.getPlatformName(),
-                        "TAB"
                 );
 
         validateRepresentativeImage(
@@ -66,15 +60,6 @@ public class OgqValidationService {
                 "main.png",
                 spec.getMainWidth(),
                 spec.getMainHeight(),
-                spec.getMaxFileSizeBytes()
-        );
-
-        validateRepresentativeImage(
-                items,
-                tabImage,
-                "tab.png",
-                spec.getTabWidth(),
-                spec.getTabHeight(),
                 spec.getMaxFileSizeBytes()
         );
 
@@ -87,16 +72,30 @@ public class OgqValidationService {
             PlatformSpec spec
     ) {
         int actualCount = stickerImages.size();
-        int expectedCount = spec.getRequiredStickerCount();
 
-        boolean valid = actualCount == expectedCount;
+        Integer minCount = spec.getMinStickerCount();
+        Integer maxCount = spec.getMaxStickerCount();
+
+        boolean valid = true;
+        String expected;
+
+        if (maxCount == null) {
+            expected = minCount + "개 이상";
+            valid = actualCount >= minCount;
+        } else if (minCount.equals(maxCount)) {
+            expected = minCount + "개";
+            valid = actualCount == minCount;
+        } else {
+            expected = minCount + "개 ~ " + maxCount + "개";
+            valid = actualCount >= minCount && actualCount <= maxCount;
+        }
 
         items.add(new ValidationItem(
-                spec.getPlatformName() + " 스티커 개수",
+                spec.getSubmissionType() + " 스티커 개수",
                 "STICKER_COUNT",
                 valid,
-                valid ? "스티커 개수 정상" : "스티커 개수가 부족하거나 많습니다.",
-                expectedCount + "개",
+                valid ? "스티커 개수 정상" : "스티커 개수가 제출 조건과 다릅니다.",
+                expected,
                 actualCount + "개"
         ));
     }
@@ -225,7 +224,7 @@ public class OgqValidationService {
 
         OgqValidationResponse response = new OgqValidationResponse();
         response.setProjectId(projectId);
-        response.setPlatformName(spec.getPlatformName());
+        response.setPlatformName(spec.getSubmissionType());
         response.setTotalCount(totalCount);
         response.setSuccessCount(successCount);
         response.setFailCount(failCount);
@@ -238,9 +237,14 @@ public class OgqValidationService {
 
     private String formatFileSize(long sizeBytes) {
         long oneMb = 1024L * 1024L;
+        long oneKb = 1024L;
 
         if (sizeBytes % oneMb == 0) {
             return (sizeBytes / oneMb) + "MB";
+        }
+
+        if (sizeBytes % oneKb == 0) {
+            return (sizeBytes / oneKb) + "KB";
         }
 
         return sizeBytes + " bytes";

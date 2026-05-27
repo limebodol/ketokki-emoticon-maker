@@ -8,24 +8,45 @@ import java.util.Optional;
 
 public interface ConvertedImageRepository extends JpaRepository<ConvertedImage, Long> {
 
+    // 프로젝트 기준 전체 변환 이미지 조회
     List<ConvertedImage> findByProjectIdOrderBySortOrderAsc(Long projectId);
 
-    List<ConvertedImage> findByProjectIdAndPlatformNameAndItemTypeOrderBySortOrderAsc(
-            Long projectId, String platformName, String itemType
-    );
-
-    Optional<ConvertedImage> findByProjectIdAndPlatformNameAndItemTypeAndSortOrder(
-            Long projectId, String platformName, String itemType, Integer sortOrder
-    );
-
-    Optional<ConvertedImage> findByProjectIdAndPlatformNameAndItemType(
-            Long projectId, String platformName, String itemType
-    );
-
-    void deleteByProjectIdAndPlatformName(Long projectId, String platformName);
-
-    // ★ 추가: ZipService에서 사용
+    // 프로젝트 + 플랫폼 기준 변환 이미지 조회
     List<ConvertedImage> findByProjectIdAndPlatformNameOrderBySortOrderAsc(
-            Long projectId, String platformName
+            Long projectId,
+            String platformName
+    );
+
+    // 프로젝트 + 플랫폼 + 이미지 구분 기준 조회
+    // 예: OGQ / STICKER만 조회
+    List<ConvertedImage> findByProjectIdAndPlatformNameAndItemTypeOrderBySortOrderAsc(
+            Long projectId,
+            String platformName,
+            String itemType
+    );
+
+    // 프로젝트 + 플랫폼 + 이미지 구분 기준 단일 조회
+    // 예: OGQ / MAIN 또는 OGQ / TAB 조회
+    Optional<ConvertedImage> findByProjectIdAndPlatformNameAndItemType(
+            Long projectId,
+            String platformName,
+            String itemType
+    );
+
+    // 프로젝트 + 플랫폼 + 이미지 구분 + 순서 기준 단일 조회
+    // 예: OGQ / STICKER / 1번 이미지 조회
+    Optional<ConvertedImage> findByProjectIdAndPlatformNameAndItemTypeAndSortOrder(
+            Long projectId,
+            String platformName,
+            String itemType,
+            Integer sortOrder
+    );
+
+    // 프로젝트 + 플랫폼 + 이미지 구분 기준 삭제
+    // 예: OGQ / STICKER 기존 변환 결과 삭제
+    void deleteByProjectIdAndPlatformNameAndItemType(
+            Long projectId,
+            String platformName,
+            String itemType
     );
 }

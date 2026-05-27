@@ -18,7 +18,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class OgqRepresentativeService {
+public class LineRepresentativeService {
 
     private final ConvertedImageRepository convertedImageRepository;
     private final PlatformSpecService platformSpecService;
@@ -27,15 +27,19 @@ public class OgqRepresentativeService {
     private String convertedDir;
 
     @Transactional
-    public OgqRepresentativeResponse createRepresentativeImages(Long projectId, Integer selectedOrder) {
-        PlatformSpec spec = platformSpecService.getSpec("OGQ");
+    public OgqRepresentativeResponse createRepresentativeImages(
+            Long projectId,
+            Integer selectedOrder
+    ) {
+        PlatformSpec spec = platformSpecService.getSpec("LINE");
+        String platformKey = spec.getSubmissionType();
 
-        validateSelectedOrder(projectId, selectedOrder, spec);
+        validateSelectedOrder(projectId, selectedOrder, platformKey);
 
         ConvertedImage selectedSticker = convertedImageRepository
                 .findByProjectIdAndPlatformNameAndItemTypeAndSortOrder(
                         projectId,
-                        spec.getPlatformName(),
+                        platformKey,
                         "STICKER",
                         selectedOrder
                 )
@@ -87,7 +91,7 @@ public class OgqRepresentativeService {
 
             ConvertedImage mainImage = saveOrUpdateRepresentative(
                     projectId,
-                    spec,
+                    platformKey,
                     "MAIN",
                     "main.png",
                     mainFile,
@@ -98,7 +102,7 @@ public class OgqRepresentativeService {
 
             ConvertedImage tabImage = saveOrUpdateRepresentative(
                     projectId,
-                    spec,
+                    platformKey,
                     "TAB",
                     "tab.png",
                     tabFile,
@@ -114,14 +118,14 @@ public class OgqRepresentativeService {
             return response;
 
         } catch (Exception e) {
-            throw new RuntimeException("대표 이미지 생성 실패: " + e.getMessage(), e);
+            throw new RuntimeException("LINE 대표 이미지 생성 실패: " + e.getMessage(), e);
         }
     }
 
     private void validateSelectedOrder(
             Long projectId,
             Integer selectedOrder,
-            PlatformSpec spec
+            String platformKey
     ) {
         if (selectedOrder == null) {
             throw new RuntimeException("대표컷 번호가 없습니다.");
@@ -136,16 +140,13 @@ public class OgqRepresentativeService {
         List<ConvertedImage> stickerImages =
                 convertedImageRepository.findByProjectIdAndPlatformNameAndItemTypeOrderBySortOrderAsc(
                         projectId,
-                        spec.getPlatformName(),
+                        platformKey,
                         "STICKER"
                 );
 
         if (stickerImages.isEmpty()) {
             throw new RuntimeException(
-                    spec.getPlatformName()
-                            + " 변환된 스티커 이미지가 없습니다. 먼저 "
-                            + spec.getPlatformName()
-                            + " 변환을 진행해주세요."
+                    "LINE 변환된 스티커 이미지가 없습니다. 먼저 변환을 진행해주세요."
             );
         }
 
@@ -165,9 +166,7 @@ public class OgqRepresentativeService {
 
         if (!exists) {
             throw new RuntimeException(
-                    "선택한 번호의 "
-                            + spec.getPlatformName()
-                            + " 스티커 이미지가 없습니다. 선택 번호: "
+                    "선택한 번호의 LINE 스티커 이미지가 없습니다. 선택 번호: "
                             + selectedOrder
             );
         }
@@ -175,7 +174,7 @@ public class OgqRepresentativeService {
 
     private ConvertedImage saveOrUpdateRepresentative(
             Long projectId,
-            PlatformSpec spec,
+            String platformKey,
             String itemType,
             String fileName,
             File file,
@@ -186,14 +185,14 @@ public class OgqRepresentativeService {
         Optional<ConvertedImage> existing = convertedImageRepository
                 .findByProjectIdAndPlatformNameAndItemType(
                         projectId,
-                        spec.getPlatformName(),
+                        platformKey,
                         itemType
                 );
 
         ConvertedImage convertedImage = existing.orElse(new ConvertedImage());
 
         convertedImage.setProjectId(projectId);
-        convertedImage.setPlatformName(spec.getPlatformName());
+        convertedImage.setPlatformName(platformKey);
         convertedImage.setItemType(itemType);
         convertedImage.setConvertedFileName(fileName);
         convertedImage.setConvertedFilePath(file.getAbsolutePath());

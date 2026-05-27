@@ -6,11 +6,10 @@ import com.ketokki.stickermaker.dto.PlatformSpec;
 import com.ketokki.stickermaker.repository.ConvertedImageRepository;
 import com.ketokki.stickermaker.repository.UploadedImageRepository;
 import com.ketokki.stickermaker.util.ImageResizeUtil;
-
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -20,7 +19,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-public class OgqConvertService {
+public class KakaoConvertService {
 
     private final UploadedImageRepository uploadedImageRepository;
     private final ConvertedImageRepository convertedImageRepository;
@@ -28,10 +27,11 @@ public class OgqConvertService {
 
     @Value("${file.converted-dir}")
     private String convertedDir;
-    
+
     @Transactional
-    public List<ConvertedImage> convertToOgq(Long projectId) {
-        PlatformSpec spec = platformSpecService.getSpec("OGQ");
+    public List<ConvertedImage> convertToKakao(Long projectId) {
+        PlatformSpec spec = platformSpecService.getSpec("KAKAO");
+        String platformKey = spec.getSubmissionType();
 
         List<UploadedImage> uploadedImages =
                 uploadedImageRepository.findByProjectIdOrderBySortOrderAsc(projectId);
@@ -39,6 +39,13 @@ public class OgqConvertService {
         if (uploadedImages.isEmpty()) {
             throw new RuntimeException("업로드된 이미지가 없습니다.");
         }
+
+        /*
+         * 테스트 변환은 32장 미만이어도 허용합니다.
+         * 단, 32장을 초과하는 경우에는 파일 개수 초과이므로 변환을 막습니다.
+         * 최종 제출 가능 여부는 KakaoValidationService에서 검수합니다.
+         */
+        validateStickerCountForTest(uploadedImages.size(), spec);
 
         try {
             File platformDir = new File(
@@ -49,15 +56,9 @@ public class OgqConvertService {
                 platformDir.mkdirs();
             }
 
-            /*
-             * 같은 프로젝트의 OGQ STICKER 변환 결과를 다시 만들 때,
-             * 기존 STICKER 데이터가 중복으로 쌓이지 않도록 삭제합니다.
-             *
-             * main.png, tab.png는 itemType이 MAIN/TAB이므로 여기서는 삭제하지 않습니다.
-             */
             convertedImageRepository.deleteByProjectIdAndPlatformNameAndItemType(
                     projectId,
-                    spec.getPlatformName(),
+                    platformKey,
                     "STICKER"
             );
 
@@ -104,7 +105,7 @@ public class OgqConvertService {
 
                 ConvertedImage convertedImage = new ConvertedImage();
                 convertedImage.setProjectId(projectId);
-                convertedImage.setPlatformName(spec.getPlatformName());
+                convertedImage.setPlatformName(platformKey);
                 convertedImage.setItemType("STICKER");
                 convertedImage.setConvertedFileName(convertedFileName);
                 convertedImage.setConvertedFilePath(convertedFile.getAbsolutePath());
@@ -119,7 +120,21 @@ public class OgqConvertService {
             return convertedImages;
 
         } catch (Exception e) {
-            throw new RuntimeException("OGQ 변환 실패: " + e.getMessage(), e);
+            throw new RuntimeException("KAKAO 변환 실패: " + e.getMessage(), e);
+        }
+    }
+
+    private void validateStickerCountForTest(int actualCount, PlatformSpec spec) {
+        Integer maxCount = spec.getMaxStickerCount();
+
+        if (maxCount != null && actualCount > maxCount) {
+            throw new RuntimeException(
+                    "KAKAO 정지형 이모티콘은 최대 "
+                            + maxCount
+                            + "개까지만 등록할 수 있습니다. 현재: "
+                            + actualCount
+                            + "개"
+            );
         }
     }
 }

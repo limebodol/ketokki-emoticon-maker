@@ -15,20 +15,21 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class OgqValidationService {
+public class LineValidationService {
 
     private final ConvertedImageRepository convertedImageRepository;
     private final PlatformSpecService platformSpecService;
 
-    public OgqValidationResponse validateOgq(Long projectId) {
-        PlatformSpec spec = platformSpecService.getSpec("OGQ");
+    public OgqValidationResponse validateLine(Long projectId) {
+        PlatformSpec spec = platformSpecService.getSpec("LINE");
+        String platformKey = spec.getSubmissionType();
 
         List<ValidationItem> items = new ArrayList<>();
 
         List<ConvertedImage> stickerImages =
                 convertedImageRepository.findByProjectIdAndPlatformNameAndItemTypeOrderBySortOrderAsc(
                         projectId,
-                        spec.getPlatformName(),
+                        platformKey,
                         "STICKER"
                 );
 
@@ -42,6 +43,7 @@ public class OgqValidationService {
                     spec.getStickerWidth(),
                     spec.getStickerHeight()
             );
+            validateEvenPixelSize(items, image);
             validateFileSize(items, image, spec.getMaxFileSizeBytes());
             validatePngFormat(items, image);
         }
@@ -49,14 +51,14 @@ public class OgqValidationService {
         Optional<ConvertedImage> mainImage =
                 convertedImageRepository.findByProjectIdAndPlatformNameAndItemType(
                         projectId,
-                        spec.getPlatformName(),
+                        platformKey,
                         "MAIN"
                 );
 
         Optional<ConvertedImage> tabImage =
                 convertedImageRepository.findByProjectIdAndPlatformNameAndItemType(
                         projectId,
-                        spec.getPlatformName(),
+                        platformKey,
                         "TAB"
                 );
 
@@ -87,16 +89,24 @@ public class OgqValidationService {
             PlatformSpec spec
     ) {
         int actualCount = stickerImages.size();
-        int expectedCount = spec.getRequiredStickerCount();
+        Integer minCount = spec.getMinStickerCount();
+        Integer maxCount = spec.getMaxStickerCount();
 
-        boolean valid = actualCount == expectedCount;
+        boolean valid =
+                actualCount >= minCount
+                        && (maxCount == null || actualCount <= maxCount);
+
+        String expected =
+                maxCount == null
+                        ? minCount + "개 이상"
+                        : minCount + "개 ~ " + maxCount + "개";
 
         items.add(new ValidationItem(
-                spec.getPlatformName() + " 스티커 개수",
+                "LINE 스티커 개수",
                 "STICKER_COUNT",
                 valid,
-                valid ? "스티커 개수 정상" : "스티커 개수가 부족하거나 많습니다.",
-                expectedCount + "개",
+                valid ? "스티커 개수 정상" : "LINE 정지형 스티커 개수가 제출 조건과 다릅니다.",
+                expected,
                 actualCount + "개"
         ));
     }
@@ -134,6 +144,22 @@ public class OgqValidationService {
                 valid,
                 valid ? "이미지 크기 정상" : "이미지 크기가 규격과 다릅니다.",
                 expectedWidth + "x" + expectedHeight,
+                image.getWidth() + "x" + image.getHeight()
+        ));
+    }
+
+    private void validateEvenPixelSize(
+            List<ValidationItem> items,
+            ConvertedImage image
+    ) {
+        boolean valid = image.getWidth() % 2 == 0 && image.getHeight() % 2 == 0;
+
+        items.add(new ValidationItem(
+                image.getConvertedFileName(),
+                "EVEN_PIXEL_SIZE",
+                valid,
+                valid ? "가로/세로 짝수 픽셀 정상" : "LINE은 이미지 가로/세로가 짝수 픽셀이어야 합니다.",
+                "가로/세로 짝수 픽셀",
                 image.getWidth() + "x" + image.getHeight()
         ));
     }
@@ -196,6 +222,7 @@ public class OgqValidationService {
 
         validateFileExists(items, image);
         validateImageSize(items, image, expectedWidth, expectedHeight);
+        validateEvenPixelSize(items, image);
         validateFileSize(items, image, maxFileSizeBytes);
         validatePngFormat(items, image);
     }
@@ -225,7 +252,7 @@ public class OgqValidationService {
 
         OgqValidationResponse response = new OgqValidationResponse();
         response.setProjectId(projectId);
-        response.setPlatformName(spec.getPlatformName());
+        response.setPlatformName(spec.getSubmissionType());
         response.setTotalCount(totalCount);
         response.setSuccessCount(successCount);
         response.setFailCount(failCount);
@@ -238,9 +265,14 @@ public class OgqValidationService {
 
     private String formatFileSize(long sizeBytes) {
         long oneMb = 1024L * 1024L;
+        long oneKb = 1024L;
 
         if (sizeBytes % oneMb == 0) {
             return (sizeBytes / oneMb) + "MB";
+        }
+
+        if (sizeBytes % oneKb == 0) {
+            return (sizeBytes / oneKb) + "KB";
         }
 
         return sizeBytes + " bytes";
