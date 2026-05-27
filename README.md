@@ -2,14 +2,7 @@
 
 <br />
 
-<img src="docs/images/demo.gif" alt="케토끼 이모티콘 메이커 시연 화면" width="850" />
 
-<br />
-<br />
-
-<img src="https://capsule-render.vercel.app/api?type=soft&color=FFDEE9,FDEB71,B5EAEA,DCC6FF&height=180&section=header&text=Ketokki%20Emoticon%20Maker&fontSize=42&fontColor=5F4D62&animation=twinkling&fontAlignY=45&desc=AI%20character%20image%20to%20platform-ready%20sticker%20files&descSize=16&descAlignY=70" />
-
-<br />
 
 # 🐰 케토끼 이모티콘 메이커
 
@@ -32,6 +25,16 @@
 > 캐릭터 이미지를 업로드하고, 플랫폼 제출 규격에 맞게 변환하고,  
 > 대표 이미지 생성부터 검수, ZIP 다운로드까지 한 번에 진행할 수 있는 웹 서비스입니다.
 
+<br />
+
+<img src="docs/images/demo.gif" alt="케토끼 이모티콘 메이커 시연 화면" width="850" />
+
+<br />
+<br />
+
+<img src="https://capsule-render.vercel.app/api?type=soft&color=FFDEE9,FDEB71,B5EAEA,DCC6FF&height=180&section=header&text=Ketokki%20Emoticon%20Maker&fontSize=42&fontColor=5F4D62&animation=twinkling&fontAlignY=45&desc=AI%20character%20image%20to%20platform-ready%20sticker%20files&descSize=16&descAlignY=70" />
+
+<br />
 <br />
 
 </div>
