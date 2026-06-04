@@ -31,6 +31,7 @@ public class MoheemConvertService {
     @Transactional
     public List<ConvertedImage> convertToMoheem(Long projectId, String specKey) {
         PlatformSpec spec = platformSpecService.getSpec(specKey);
+
         String platformKey = spec.getSubmissionType();
 
         List<UploadedImage> uploadedImages =
@@ -48,7 +49,10 @@ public class MoheemConvertService {
             );
 
             if (!platformDir.exists()) {
-                platformDir.mkdirs();
+                boolean created = platformDir.mkdirs();
+                if (!created) {
+                    throw new RuntimeException("변환 폴더를 생성할 수 없습니다: " + platformDir.getAbsolutePath());
+                }
             }
 
             convertedImageRepository.deleteByProjectIdAndPlatformNameAndItemType(

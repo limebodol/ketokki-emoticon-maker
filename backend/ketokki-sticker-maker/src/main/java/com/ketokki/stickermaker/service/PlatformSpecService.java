@@ -82,18 +82,6 @@ public class PlatformSpecService {
     }
 
     private PlatformSpec getLineStaticSpec() {
-        /*
-         * LINE 정지형 스티커 기준
-         *
-         * - 스티커 이미지: 370 x 320 px 이하
-         * - 메인 이미지: 240 x 240 px
-         * - 탭 이미지: 96 x 74 px
-         * - PNG
-         * - 각 이미지 1MB 이하
-         * - 가로/세로 짝수 픽셀 권장/필수
-         *
-         * 현재 MVP에서는 스티커 이미지를 370 x 320 캔버스로 변환합니다.
-         */
         return new PlatformSpec(
                 "LINE",
                 24,
@@ -115,7 +103,7 @@ public class PlatformSpecService {
 
     private PlatformSpec getMoheemPlusSpec() {
         return new PlatformSpec(
-                "MOHEEM",
+                "MOHEEM_PLUS",
                 24,
                 24,
                 null,
@@ -126,8 +114,8 @@ public class PlatformSpecService {
                 0,
                 0,
                 FIVE_HUNDRED_KB,
-                "MOHEEM",
-                "moheem",
+                "MOHEEM_PLUS",
+                "moheem_plus",
                 false,
                 "MOHEEM_PLUS"
         );
@@ -135,7 +123,7 @@ public class PlatformSpecService {
 
     private PlatformSpec getMoheemBasicSpec() {
         return new PlatformSpec(
-                "MOHEEM",
+                "MOHEEM_BASIC",
                 23,
                 1,
                 23,
@@ -146,8 +134,8 @@ public class PlatformSpecService {
                 0,
                 0,
                 FIVE_HUNDRED_KB,
-                "MOHEEM",
-                "moheem",
+                "MOHEEM_BASIC",
+                "moheem_basic",
                 false,
                 "MOHEEM_BASIC"
         );

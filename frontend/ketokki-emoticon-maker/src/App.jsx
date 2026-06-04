@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ImageCropEditor from "./ImageCropEditor";
 import RepresentativePreview from "./RepresentativePreview";
-import creatorBanner from "./assets/creator-banner.jpg";
 import FinalSubmissionPreview from "./FinalSubmissionPreview";
+import creatorBanner from "./assets/creator-banner.jpg";
 
 const API_BASE_URL = "http://localhost:8080";
 const DEFAULT_OGQ_COUNT = 24;
@@ -30,6 +30,10 @@ function App() {
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [usageStatus, setUsageStatus] = useState(null);
+  const [usageStatusError, setUsageStatusError] = useState("");
+
+  const fileInputRef = useRef(null);
 
   const platformSpecKey =
     selectedPlatform === "MOHEEM"
@@ -98,6 +102,10 @@ function App() {
     fetchPlatformSpec(platformSpecKey);
   }, [platformSpecKey]);
 
+  useEffect(() => {
+    fetchUsageLimitStatus();
+  }, []);
+
   const fetchPlatformSpec = async (specKey) => {
     setPlatformSpec(null);
     setPlatformSpecError("");
@@ -119,6 +127,27 @@ function App() {
       setPlatformSpec(data);
     } catch (err) {
       setPlatformSpecError(err.message);
+    }
+  };
+
+  const fetchUsageLimitStatus = async () => {
+    setUsageStatusError("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/usage/convert/status`);
+
+      if (!response.ok) {
+        const errorMessage = await getErrorMessage(
+          response,
+          "무료 체험 사용량 정보를 불러오지 못했습니다.",
+        );
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      setUsageStatus(data);
+    } catch (err) {
+      setUsageStatusError(err.message);
     }
   };
 
@@ -300,13 +329,24 @@ function App() {
   };
 
   const resetAfterProject = () => {
+    previewImages.forEach((image) => {
+      if (image.url) {
+        URL.revokeObjectURL(image.url);
+      }
+    });
+
     setSelectedFiles([]);
     setPreviewImages([]);
     setUploadedImages([]);
     setConvertedImages([]);
     setRepresentativeResult(null);
     setValidationResult(null);
+    setEditingImageIndex(null);
     setSelectedOrder(1);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const resetAfterImageEdit = () => {
@@ -386,6 +426,42 @@ function App() {
 
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
+
+    const maxPublicUploadCount = 40;
+    const maxPublicFileSize = 1024 * 1024;
+
+    if (files.length > maxPublicUploadCount) {
+      setError(
+        `무료 체험 버전에서는 1회 최대 ${maxPublicUploadCount}장까지만 업로드할 수 있습니다. 현재 선택한 파일 수: ${files.length}장`,
+      );
+      e.target.value = "";
+      return;
+    }
+
+    const overSizeFile = files.find((file) => file.size > maxPublicFileSize);
+
+    if (overSizeFile) {
+      setError(
+        `이미지 1장 최대 용량은 1MB입니다. 용량을 줄인 뒤 다시 업로드해주세요. 초과 파일: ${overSizeFile.name}`,
+      );
+      e.target.value = "";
+      return;
+    }
+
+    const invalidFile = files.find(
+      (file) =>
+        file.type !== "image/png" &&
+        file.type !== "image/jpeg" &&
+        file.type !== "image/jpg",
+    );
+
+    if (invalidFile) {
+      setError(
+        `PNG 또는 JPG/JPEG 이미지만 업로드할 수 있습니다. 지원하지 않는 파일: ${invalidFile.name}`,
+      );
+      e.target.value = "";
+      return;
+    }
 
     setSelectedFiles(files);
     setUploadedImages([]);
@@ -474,18 +550,32 @@ function App() {
 
     if (!project) {
       setError("먼저 프로젝트를 만들어주세요.");
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+
       return;
     }
 
     if (uploadedImages.length === 0) {
       setError("먼저 이미지를 업로드해주세요.");
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+
       return;
     }
 
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/projects/${project.id}/convert/${platformSpecKey}`,
-        { method: "POST" },
+        {
+          method: "POST",
+        },
       );
 
       if (!response.ok) {
@@ -493,16 +583,41 @@ function App() {
           response,
           `${getPackTypeText()} 변환에 실패했습니다.`,
         );
-        throw new Error(errorMessage);
+
+        setError(errorMessage);
+        fetchUsageLimitStatus();
+
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth",
+        });
+
+        return;
       }
 
       const data = await response.json();
+
       setConvertedImages(data);
       setMessage(
         `${data.length}개의 이미지가 ${getPackTypeText()} 규격으로 변환되었습니다.`,
       );
+
+      fetchUsageLimitStatus();
+
+      /*
+       * 변환 성공 시에는 화면을 맨 위로 올리지 않습니다.
+       * 사용자가 바로 아래의 변환 결과와 미리보기를 확인할 수 있게 유지합니다.
+       */
     } catch (err) {
-      setError(err.message);
+      setError(
+        err.message || `${getPackTypeText()} 변환 중 오류가 발생했습니다.`,
+      );
+      fetchUsageLimitStatus();
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
     }
   };
 
@@ -608,7 +723,16 @@ function App() {
 
   const getConvertedImageUrl = (fileName) => {
     if (!project || !fileName) return "";
+
     return `${API_BASE_URL}/files/converted/${project.id}/${outputFolderName}/${fileName}`;
+  };
+
+  const getZipFileName = () => {
+    if (!project) {
+      return `${platformSpecKey.toLowerCase()}_submission.zip`;
+    }
+
+    return `project_${project.id}_${platformSpecKey.toLowerCase()}_submission.zip`;
   };
 
   const selectRepresentativeSlot = (slot) => {
@@ -679,13 +803,24 @@ function App() {
   };
 
   const clearSelectedImages = () => {
+    previewImages.forEach((image) => {
+      if (image.url) {
+        URL.revokeObjectURL(image.url);
+      }
+    });
+
     setSelectedFiles([]);
     setPreviewImages([]);
     setUploadedImages([]);
     setConvertedImages([]);
     setRepresentativeResult(null);
     setValidationResult(null);
+    setEditingImageIndex(null);
     setSelectedOrder(1);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
 
     setError("");
     setMessage("선택한 이미지를 모두 초기화했습니다.");
@@ -731,14 +866,6 @@ function App() {
   const getSelectedRepresentativePreviewImage = () => {
     if (!selectedOrder || selectedOrder < 1) return null;
     return previewImages[selectedOrder - 1] || null;
-  };
-
-  const getZipFileName = () => {
-    if (!project) {
-      return `${platformSpecKey.toLowerCase()}_submission.zip`;
-    }
-
-    return `project_${project.id}_${platformSpecKey.toLowerCase()}_submission.zip`;
   };
 
   const slotItems = Array.from({ length: slotCount }, (_, index) => {
@@ -805,6 +932,88 @@ function App() {
           플랫폼 선택 → 프로젝트 생성 → 이미지 선택/위치 조정 → 업로드 → 규격
           변환 → 대표 이미지 확인 → 검수 → ZIP 다운로드 순서로 진행하면 됩니다.
         </p>
+      </section>
+
+      <section style={styles.freeTrialGuideBox}>
+        <div>
+          <p style={styles.freeTrialBadge}>FREE TRIAL</p>
+          <h2 style={styles.freeTrialTitle}>무료 체험 공개 버전 안내</h2>
+          <p style={styles.freeTrialDescription}>
+            로그인 없이 바로 사용할 수 있지만, 서버 보호를 위해 업로드 용량과
+            변환 횟수에 제한이 있습니다.
+          </p>
+        </div>
+
+        <div style={styles.freeTrialGrid}>
+          <div style={styles.freeTrialItem}>
+            <span style={styles.freeTrialIcon}>🖼️</span>
+            <strong>1회 최대 40장</strong>
+            <p>한 번에 업로드할 수 있는 이미지 개수입니다.</p>
+          </div>
+
+          <div style={styles.freeTrialItem}>
+            <span style={styles.freeTrialIcon}>📦</span>
+            <strong>이미지 1장 최대 1MB</strong>
+            <p>PNG, JPG, JPEG 파일만 업로드할 수 있습니다.</p>
+          </div>
+
+          <div style={styles.freeTrialItem}>
+            <span style={styles.freeTrialIcon}>🔁</span>
+            <strong>하루 변환 5회</strong>
+            <p>같은 접속 환경 기준으로 하루 최대 5회 변환할 수 있습니다.</p>
+          </div>
+
+          <div style={styles.freeTrialItem}>
+            <span style={styles.freeTrialIcon}>⏰</span>
+            <strong>1시간 후 자동 삭제</strong>
+            <p>
+              업로드 이미지, 변환 파일, ZIP 파일은 임시 저장 후 자동 삭제됩니다.
+            </p>
+          </div>
+        </div>
+
+        <div style={styles.usageStatusBox}>
+          <div>
+            <strong>오늘의 무료 변환 사용량</strong>
+
+            {usageStatus ? (
+              <p style={styles.usageStatusText}>
+                {usageStatus.usedCount} / {usageStatus.dailyLimit}회 사용 · 남은
+                횟수 {usageStatus.remainingCount}회
+              </p>
+            ) : (
+              <p style={styles.usageStatusText}>
+                무료 변환 사용량 정보를 불러오는 중입니다.
+              </p>
+            )}
+
+            {usageStatusError && (
+              <p style={styles.usageStatusError}>{usageStatusError}</p>
+            )}
+          </div>
+
+          {usageStatus && (
+            <span
+              style={{
+                ...styles.usageStatusBadge,
+                backgroundColor: usageStatus.available ? "#eefced" : "#fff1f5",
+                color: usageStatus.available ? "#4f8c63" : "#d26081",
+                borderColor: usageStatus.available ? "#cce8d3" : "#f8d0db",
+              }}
+            >
+              {usageStatus.available ? "변환 가능" : "오늘 횟수 소진"}
+            </span>
+          )}
+        </div>
+
+        <div style={styles.freeTrialNotice}>
+          <strong>안내</strong>
+          <p>
+            현재 버전은 비회원 무료 체험용 MVP입니다. 변환 횟수를 모두
+            사용했다면 내일 다시 이용해주세요. 테스트 중에는 DB의 usage_limit
+            데이터를 초기화해 확인할 수 있습니다.
+          </p>
+        </div>
       </section>
 
       {message && <div style={styles.successBox}>{message}</div>}
@@ -981,12 +1190,24 @@ function App() {
 
             <div style={styles.uploadBox}>
               <input
+                ref={fileInputRef}
                 type="file"
                 accept="image/png, image/jpeg"
                 multiple
                 onChange={handleFileChange}
               />
               <p>선택된 파일 수: {selectedFiles.length}개</p>
+            </div>
+
+            <div style={styles.publicLimitBox}>
+              <strong>업로드 전 확인해주세요</strong>
+              <p>1회 최대 40장까지 업로드할 수 있습니다.</p>
+              <p>이미지 1장당 최대 용량은 1MB입니다.</p>
+              <p>PNG, JPG, JPEG 파일만 사용할 수 있습니다.</p>
+              <p>
+                업로드한 이미지와 변환 파일, ZIP 파일은 1시간 후 자동
+                삭제됩니다.
+              </p>
             </div>
 
             {selectedFiles.length > 0 && (
@@ -1599,7 +1820,6 @@ const styles = {
     fontSize: "15px",
     fontWeight: "800",
     marginBottom: "12px",
-    fontFamily: '"Nunito", "Noto Sans KR", sans-serif',
     boxShadow: "0 4px 10px rgba(222, 121, 151, 0.12)",
   },
 
@@ -1608,7 +1828,6 @@ const styles = {
     margin: "0 0 10px",
     letterSpacing: "-1px",
     color: "#5f4d62",
-    fontFamily: '"Nunito", "Noto Sans KR", "Malgun Gothic", sans-serif',
     fontWeight: "800",
   },
 
@@ -1646,7 +1865,6 @@ const styles = {
     margin: "0 0 10px",
     fontSize: "30px",
     color: "#5a4b60",
-    fontFamily: '"Nunito", "Noto Sans KR", "Malgun Gothic", sans-serif',
     fontWeight: "800",
   },
 
@@ -1736,6 +1954,186 @@ const styles = {
     boxShadow: "0 6px 12px rgba(240, 224, 163, 0.12)",
   },
 
+  freeTrialGuideBox: {
+    maxWidth: "1120px",
+    margin: "0 auto 24px",
+    padding: "22px",
+    borderRadius: "26px",
+    background:
+      "linear-gradient(135deg, #fff8fb 0%, #fffdf2 45%, #f3fbff 100%)",
+    border: "2px solid #f5dce5",
+    boxShadow: "0 10px 24px rgba(218, 189, 197, 0.12)",
+  },
+
+  freeTrialBadge: {
+    display: "inline-block",
+    margin: "0 0 8px",
+    padding: "6px 12px",
+    borderRadius: "999px",
+    background: "#fff",
+    border: "2px solid #f6c8d7",
+    color: "#e26f93",
+    fontSize: "13px",
+    fontWeight: "900",
+    letterSpacing: "0.5px",
+  },
+
+  freeTrialTitle: {
+    margin: "0 0 8px",
+    color: "#5b4a5f",
+    fontSize: "24px",
+    fontWeight: "900",
+  },
+
+  freeTrialDescription: {
+    margin: "0 0 18px",
+    color: "#756d6a",
+    lineHeight: 1.7,
+  },
+
+  freeTrialGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+    gap: "12px",
+  },
+
+  freeTrialItem: {
+    padding: "16px",
+    borderRadius: "20px",
+    backgroundColor: "#ffffff",
+    border: "1.8px solid #f1dfe6",
+    boxShadow: "0 6px 14px rgba(230, 205, 214, 0.12)",
+  },
+
+  freeTrialIcon: {
+    display: "inline-flex",
+    width: "34px",
+    height: "34px",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "50%",
+    background: "linear-gradient(135deg, #ffe0ea 0%, #e7d5ff 100%)",
+    marginBottom: "8px",
+    fontSize: "18px",
+  },
+
+  usageStatusBox: {
+    marginTop: "16px",
+    padding: "16px",
+    borderRadius: "18px",
+    backgroundColor: "#ffffff",
+    border: "2px solid #f1dfe6",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "12px",
+    flexWrap: "wrap",
+    boxShadow: "0 6px 14px rgba(230, 205, 214, 0.12)",
+  },
+
+  usageStatusText: {
+    margin: "6px 0 0",
+    color: "#756d6a",
+    lineHeight: 1.6,
+  },
+
+  usageStatusError: {
+    margin: "6px 0 0",
+    color: "#d26081",
+    fontWeight: "800",
+  },
+
+  usageStatusBadge: {
+    padding: "9px 14px",
+    borderRadius: "999px",
+    border: "2px solid",
+    fontWeight: "900",
+    whiteSpace: "nowrap",
+  },
+
+  freeTrialNotice: {
+    marginTop: "14px",
+    padding: "14px 16px",
+    borderRadius: "18px",
+    backgroundColor: "#fff8df",
+    border: "2px solid #f8e7ae",
+    color: "#756553",
+    lineHeight: 1.6,
+  },
+
+  freeTrialGuideBox: {
+    maxWidth: "1120px",
+    margin: "0 auto 24px",
+    padding: "22px",
+    borderRadius: "26px",
+    background:
+      "linear-gradient(135deg, #fff8fb 0%, #fffdf2 45%, #f3fbff 100%)",
+    border: "2px solid #f5dce5",
+    boxShadow: "0 10px 24px rgba(218, 189, 197, 0.12)",
+  },
+
+  freeTrialBadge: {
+    display: "inline-block",
+    margin: "0 0 8px",
+    padding: "6px 12px",
+    borderRadius: "999px",
+    background: "#fff",
+    border: "2px solid #f6c8d7",
+    color: "#e26f93",
+    fontSize: "13px",
+    fontWeight: "900",
+    letterSpacing: "0.5px",
+  },
+
+  freeTrialTitle: {
+    margin: "0 0 8px",
+    color: "#5b4a5f",
+    fontSize: "24px",
+    fontWeight: "900",
+  },
+
+  freeTrialDescription: {
+    margin: "0 0 18px",
+    color: "#756d6a",
+    lineHeight: 1.7,
+  },
+
+  freeTrialGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+    gap: "12px",
+  },
+
+  freeTrialItem: {
+    padding: "16px",
+    borderRadius: "20px",
+    backgroundColor: "#ffffff",
+    border: "1.8px solid #f1dfe6",
+    boxShadow: "0 6px 14px rgba(230, 205, 214, 0.12)",
+  },
+
+  freeTrialIcon: {
+    display: "inline-flex",
+    width: "34px",
+    height: "34px",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "50%",
+    background: "linear-gradient(135deg, #ffe0ea 0%, #e7d5ff 100%)",
+    marginBottom: "8px",
+    fontSize: "18px",
+  },
+
+  freeTrialNotice: {
+    marginTop: "14px",
+    padding: "14px 16px",
+    borderRadius: "18px",
+    backgroundColor: "#fff8df",
+    border: "2px solid #f8e7ae",
+    color: "#756553",
+    lineHeight: 1.6,
+  },
+
   layout: {
     maxWidth: "1120px",
     margin: "0 auto",
@@ -1775,7 +2173,6 @@ const styles = {
   cardTitle: {
     margin: 0,
     color: "#5b4a5f",
-    fontFamily: '"Nunito", "Noto Sans KR", "Malgun Gothic", sans-serif',
     fontSize: "26px",
     fontWeight: "800",
   },
@@ -1882,6 +2279,16 @@ const styles = {
     border: "2px dashed #eab8ca",
     borderRadius: "20px",
     background: "#fffafb",
+  },
+
+  publicLimitBox: {
+    marginTop: "14px",
+    padding: "14px 16px",
+    borderRadius: "18px",
+    backgroundColor: "#fff8df",
+    border: "2px solid #f8e7ae",
+    color: "#756553",
+    lineHeight: 1.6,
   },
 
   resetButton: {
@@ -2298,7 +2705,6 @@ const styles = {
     lineHeight: 1.7,
     color: "#5d514c",
     fontWeight: "700",
-    fontFamily: '"Nunito", "Noto Sans KR", "Malgun Gothic", sans-serif',
   },
 
   creatorInfoList: {
@@ -2324,14 +2730,12 @@ const styles = {
     fontSize: "14px",
     color: "#d07f98",
     fontWeight: "800",
-    fontFamily: '"Nunito", "Noto Sans KR", "Malgun Gothic", sans-serif',
   },
 
   creatorInfoValue: {
     fontSize: "14px",
     color: "#4d433f",
     fontWeight: "700",
-    fontFamily: '"Nunito", "Noto Sans KR", "Malgun Gothic", sans-serif',
   },
 };
 

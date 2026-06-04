@@ -18,8 +18,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ImageUploadService {
 
-    private static final int MAX_FILE_COUNT = 24;
-    private static final long MAX_FILE_SIZE = 50L * 1024 * 1024; // 50MB
+    private static final int MAX_FILE_COUNT = 40;
+    private static final long MAX_FILE_SIZE = 1024 * 1024; // 1MB
 
     private final UploadedImageRepository uploadedImageRepository;
 
@@ -30,13 +30,22 @@ public class ImageUploadService {
         validateFiles(files);
 
         try {
-            // 같은 프로젝트에 다시 업로드할 경우 기존 업로드 DB 기록 삭제
+            /*
+             * 같은 프로젝트에 다시 업로드할 경우
+             * 기존 업로드 DB 기록을 삭제합니다.
+             */
             uploadedImageRepository.deleteByProjectId(projectId);
 
             File projectUploadDir = new File(uploadDir + "/" + projectId);
 
             if (!projectUploadDir.exists()) {
-                projectUploadDir.mkdirs();
+                boolean created = projectUploadDir.mkdirs();
+
+                if (!created) {
+                    throw new RuntimeException(
+                            "업로드 폴더를 생성할 수 없습니다: " + projectUploadDir.getAbsolutePath()
+                    );
+                }
             }
 
             List<UploadedImage> savedImages = new ArrayList<>();
@@ -89,11 +98,11 @@ public class ImageUploadService {
 
         if (files.length > MAX_FILE_COUNT) {
             throw new RuntimeException(
-                    "OGQ 스티커 이미지는 최대 "
+                    "1회 업로드는 최대 "
                             + MAX_FILE_COUNT
-                            + "개까지만 업로드할 수 있습니다. 현재 선택한 파일 수: "
+                            + "장까지만 가능합니다. 현재 선택한 파일 수: "
                             + files.length
-                            + "개"
+                            + "장"
             );
         }
     }
@@ -111,9 +120,8 @@ public class ImageUploadService {
 
         if (file.getSize() > MAX_FILE_SIZE) {
             throw new RuntimeException(
-                    "파일 용량이 너무 큽니다. 파일명: "
+                    "이미지 1장 최대 용량은 1MB입니다. 용량을 줄인 뒤 다시 업로드해주세요. 파일명: "
                             + originalFileName
-                            + ", 최대 허용 용량: 50MB"
             );
         }
 
@@ -131,7 +139,7 @@ public class ImageUploadService {
 
         if (contentType == null || !isAllowedContentType(contentType)) {
             throw new RuntimeException(
-                    "이미지 파일만 업로드할 수 있습니다. 파일명: "
+                    "PNG 또는 JPG/JPEG 이미지 파일만 업로드할 수 있습니다. 파일명: "
                             + originalFileName
                             + ", 감지된 형식: "
                             + contentType
@@ -152,14 +160,14 @@ public class ImageUploadService {
     }
 
     private boolean isAllowedExtension(String extension) {
-        return extension.equals("png")
-                || extension.equals("jpg")
-                || extension.equals("jpeg");
+        return "png".equalsIgnoreCase(extension)
+                || "jpg".equalsIgnoreCase(extension)
+                || "jpeg".equalsIgnoreCase(extension);
     }
 
     private boolean isAllowedContentType(String contentType) {
-        return contentType.equalsIgnoreCase("image/png")
-                || contentType.equalsIgnoreCase("image/jpeg")
-                || contentType.equalsIgnoreCase("image/jpg");
+        return "image/png".equalsIgnoreCase(contentType)
+                || "image/jpeg".equalsIgnoreCase(contentType)
+                || "image/jpg".equalsIgnoreCase(contentType);
     }
 }
