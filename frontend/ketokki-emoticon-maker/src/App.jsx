@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import ImageCropEditor from "./ImageCropEditor";
 import RepresentativePreview from "./RepresentativePreview";
 import FinalSubmissionPreview from "./FinalSubmissionPreview";
@@ -33,7 +33,21 @@ function App() {
   const [usageStatus, setUsageStatus] = useState(null);
   const [usageStatusError, setUsageStatusError] = useState("");
 
-  const fileInputRef = useRef(null);
+  const [projectList, setProjectList] = useState([]);
+  const [projectListLoading, setProjectListLoading] = useState(false);
+  const [projectListError, setProjectListError] = useState("");
+
+  const [activeMenu, setActiveMenu] = useState("GUIDE");
+  const [projectListPage, setProjectListPage] = useState(1);
+  const PROJECTS_PER_PAGE = 5;
+
+  const [members, setMembers] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [signupUsername, setSignupUsername] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupNickname, setSignupNickname] = useState("");
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
 
   const platformSpecKey =
     selectedPlatform === "MOHEEM"
@@ -329,24 +343,13 @@ function App() {
   };
 
   const resetAfterProject = () => {
-    previewImages.forEach((image) => {
-      if (image.url) {
-        URL.revokeObjectURL(image.url);
-      }
-    });
-
     setSelectedFiles([]);
     setPreviewImages([]);
     setUploadedImages([]);
     setConvertedImages([]);
     setRepresentativeResult(null);
     setValidationResult(null);
-    setEditingImageIndex(null);
     setSelectedOrder(1);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
   };
 
   const resetAfterImageEdit = () => {
@@ -422,6 +425,108 @@ function App() {
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const fetchProjectList = async () => {
+    setProjectListLoading(true);
+    setProjectListError("");
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/projects`);
+
+      if (!response.ok) {
+        const errorMessage = await getErrorMessage(
+          response,
+          "프로젝트 목록을 불러오지 못했습니다.",
+        );
+
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+
+      setProjectList(data);
+      setProjectListPage(1);
+      setMessage("프로젝트 목록을 불러왔습니다.");
+    } catch (err) {
+      setProjectListError(err.message);
+      setError(err.message);
+    } finally {
+      setProjectListLoading(false);
+    }
+  };
+
+  const handleSignup = () => {
+    setError("");
+    setMessage("");
+
+    if (!signupUsername.trim()) {
+      setError("회원가입 아이디를 입력해주세요.");
+      return;
+    }
+
+    if (!signupPassword.trim()) {
+      setError("회원가입 비밀번호를 입력해주세요.");
+      return;
+    }
+
+    const exists = members.some(
+      (member) => member.username === signupUsername.trim(),
+    );
+
+    if (exists) {
+      setError("이미 가입된 아이디입니다.");
+      return;
+    }
+
+    const newMember = {
+      id: Date.now(),
+      username: signupUsername.trim(),
+      nickname: signupNickname.trim() || signupUsername.trim(),
+      password: signupPassword,
+      createdAt: new Date().toLocaleString("ko-KR"),
+    };
+
+    setMembers((prev) => [...prev, newMember]);
+    setSignupUsername("");
+    setSignupPassword("");
+    setSignupNickname("");
+    setMessage(
+      "회원가입 테스트 계정이 생성되었습니다. 이제 로그인할 수 있습니다.",
+    );
+  };
+
+  const handleLogin = () => {
+    setError("");
+    setMessage("");
+
+    const foundMember = members.find(
+      (member) =>
+        member.username === loginUsername.trim() &&
+        member.password === loginPassword,
+    );
+
+    if (!foundMember) {
+      setError("아이디 또는 비밀번호가 일치하지 않습니다.");
+      return;
+    }
+
+    setCurrentUser(foundMember);
+    setLoginUsername("");
+    setLoginPassword("");
+    setMessage(`${foundMember.nickname}님, 로그인되었습니다.`);
+  };
+
+  const handleLogout = () => {
+    if (currentUser) {
+      setMessage(`${currentUser.nickname}님, 로그아웃되었습니다.`);
+    }
+
+    setCurrentUser(null);
+    setProjectList([]);
+    setProjectListPage(1);
   };
 
   const handleFileChange = (e) => {
@@ -803,24 +908,13 @@ function App() {
   };
 
   const clearSelectedImages = () => {
-    previewImages.forEach((image) => {
-      if (image.url) {
-        URL.revokeObjectURL(image.url);
-      }
-    });
-
     setSelectedFiles([]);
     setPreviewImages([]);
     setUploadedImages([]);
     setConvertedImages([]);
     setRepresentativeResult(null);
     setValidationResult(null);
-    setEditingImageIndex(null);
     setSelectedOrder(1);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
 
     setError("");
     setMessage("선택한 이미지를 모두 초기화했습니다.");
@@ -875,6 +969,16 @@ function App() {
     };
   });
 
+  const totalProjectPages = Math.max(
+    Math.ceil(projectList.length / PROJECTS_PER_PAGE),
+    1,
+  );
+
+  const pagedProjectList = projectList.slice(
+    (projectListPage - 1) * PROJECTS_PER_PAGE,
+    projectListPage * PROJECTS_PER_PAGE,
+  );
+
   return (
     <div style={styles.page}>
       <header style={styles.header}>
@@ -886,789 +990,1179 @@ function App() {
         </p>
       </header>
 
-      <section style={styles.platformSummaryCard}>
-        <div>
-          <p style={styles.summaryEyebrow}>현재 제작 설정</p>
-          <h2 style={styles.summaryTitle}>{getPackTypeText()}</h2>
-          <p style={styles.summaryDescription}>{getPlatformGuideText()}</p>
-        </div>
+      <section style={styles.menuTabBox}>
+        <button
+          type="button"
+          onClick={() => setActiveMenu("GUIDE")}
+          style={{
+            ...styles.menuTabButton,
+            ...(activeMenu === "GUIDE" ? styles.menuTabButtonActive : {}),
+          }}
+        >
+          이용방법
+        </button>
 
-        {platformSpec && (
-          <div style={styles.summaryGrid}>
-            {getCurrentPlatformSummary().map((item) => (
-              <div key={item.label} style={styles.summaryItem}>
-                <span style={styles.summaryLabel}>{item.label}</span>
-                <strong style={styles.summaryValue}>{item.value}</strong>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+        <button
+          type="button"
+          onClick={() => setActiveMenu("CREATE")}
+          style={{
+            ...styles.menuTabButton,
+            ...(activeMenu === "CREATE" ? styles.menuTabButtonActive : {}),
+          }}
+        >
+          프로젝트 생성
+        </button>
 
-      <section style={styles.stepBoard}>
-        <StepCard
-          number="1"
-          title="프로젝트 생성"
-          status={stepStatus.project}
-        />
-        <StepCard number="2" title="이미지 업로드" status={stepStatus.upload} />
-        <StepCard number="3" title="규격 변환" status={stepStatus.convert} />
-        <StepCard
-          number="4"
-          title="대표 이미지"
-          status={stepStatus.representative}
-        />
-        <StepCard number="5" title="검수" status={stepStatus.validation} />
-        <StepCard
-          number="6"
-          title="ZIP 다운로드"
-          status={stepStatus.download}
-        />
-      </section>
+        <button
+          type="button"
+          onClick={() => setActiveMenu("LIST")}
+          style={{
+            ...styles.menuTabButton,
+            ...(activeMenu === "LIST" ? styles.menuTabButtonActive : {}),
+          }}
+        >
+          프로젝트 목록
+        </button>
 
-      <section style={styles.workflowTipBox}>
-        <strong>제작 순서</strong>
-        <p>
-          플랫폼 선택 → 프로젝트 생성 → 이미지 선택/위치 조정 → 업로드 → 규격
-          변환 → 대표 이미지 확인 → 검수 → ZIP 다운로드 순서로 진행하면 됩니다.
-        </p>
-      </section>
-
-      <section style={styles.freeTrialGuideBox}>
-        <div>
-          <p style={styles.freeTrialBadge}>FREE TRIAL</p>
-          <h2 style={styles.freeTrialTitle}>무료 체험 공개 버전 안내</h2>
-          <p style={styles.freeTrialDescription}>
-            로그인 없이 바로 사용할 수 있지만, 서버 보호를 위해 업로드 용량과
-            변환 횟수에 제한이 있습니다.
-          </p>
-        </div>
-
-        <div style={styles.freeTrialGrid}>
-          <div style={styles.freeTrialItem}>
-            <span style={styles.freeTrialIcon}>🖼️</span>
-            <strong>1회 최대 40장</strong>
-            <p>한 번에 업로드할 수 있는 이미지 개수입니다.</p>
-          </div>
-
-          <div style={styles.freeTrialItem}>
-            <span style={styles.freeTrialIcon}>📦</span>
-            <strong>이미지 1장 최대 1MB</strong>
-            <p>PNG, JPG, JPEG 파일만 업로드할 수 있습니다.</p>
-          </div>
-
-          <div style={styles.freeTrialItem}>
-            <span style={styles.freeTrialIcon}>🔁</span>
-            <strong>하루 변환 5회</strong>
-            <p>같은 접속 환경 기준으로 하루 최대 5회 변환할 수 있습니다.</p>
-          </div>
-
-          <div style={styles.freeTrialItem}>
-            <span style={styles.freeTrialIcon}>⏰</span>
-            <strong>1시간 후 자동 삭제</strong>
-            <p>
-              업로드 이미지, 변환 파일, ZIP 파일은 임시 저장 후 자동 삭제됩니다.
-            </p>
-          </div>
-        </div>
-
-        <div style={styles.usageStatusBox}>
-          <div>
-            <strong>오늘의 무료 변환 사용량</strong>
-
-            {usageStatus ? (
-              <p style={styles.usageStatusText}>
-                {usageStatus.usedCount} / {usageStatus.dailyLimit}회 사용 · 남은
-                횟수 {usageStatus.remainingCount}회
-              </p>
-            ) : (
-              <p style={styles.usageStatusText}>
-                무료 변환 사용량 정보를 불러오는 중입니다.
-              </p>
-            )}
-
-            {usageStatusError && (
-              <p style={styles.usageStatusError}>{usageStatusError}</p>
-            )}
-          </div>
-
-          {usageStatus && (
-            <span
-              style={{
-                ...styles.usageStatusBadge,
-                backgroundColor: usageStatus.available ? "#eefced" : "#fff1f5",
-                color: usageStatus.available ? "#4f8c63" : "#d26081",
-                borderColor: usageStatus.available ? "#cce8d3" : "#f8d0db",
-              }}
-            >
-              {usageStatus.available ? "변환 가능" : "오늘 횟수 소진"}
-            </span>
-          )}
-        </div>
-
-        <div style={styles.freeTrialNotice}>
-          <strong>안내</strong>
-          <p>
-            현재 버전은 비회원 무료 체험용 MVP입니다. 변환 횟수를 모두
-            사용했다면 내일 다시 이용해주세요. 테스트 중에는 DB의 usage_limit
-            데이터를 초기화해 확인할 수 있습니다.
-          </p>
-        </div>
+        <button
+          type="button"
+          onClick={() => setActiveMenu("LOGIN")}
+          style={{
+            ...styles.menuTabButton,
+            ...(activeMenu === "LOGIN" ? styles.menuTabButtonActive : {}),
+          }}
+        >
+          회원가입 / 로그인
+        </button>
       </section>
 
       {message && <div style={styles.successBox}>{message}</div>}
       {error && <div style={styles.errorBox}>오류: {error}</div>}
 
       <main style={styles.layout}>
-        <section style={styles.card}>
-          <div style={styles.cardHeader}>
-            <span style={styles.stepNumber}>0</span>
-            <div>
-              <h2 style={styles.cardTitle}>플랫폼 선택</h2>
-              <p style={styles.cardDescription}>
-                제출하려는 플랫폼을 선택하면 필요한 이미지 크기, 개수, 대표
-                이미지 규격이 자동으로 표시됩니다.
-              </p>
-            </div>
-          </div>
-
-          <div style={styles.platformButtonGroup}>
-            {["OGQ", "KAKAO", "LINE", "MOHEEM"].map((platformName) => (
-              <button
-                key={platformName}
-                type="button"
-                onClick={() => changePlatform(platformName)}
-                style={{
-                  ...styles.platformButton,
-                  background:
-                    selectedPlatform === platformName
-                      ? "linear-gradient(135deg, #ffb5cb 0%, #d8b8ff 100%)"
-                      : "#fff",
-                  color: selectedPlatform === platformName ? "#fff" : "#6c5e5e",
-                  borderColor:
-                    selectedPlatform === platformName ? "#ffffff" : "#eed7df",
-                }}
-              >
-                {platformName}
-              </button>
-            ))}
-          </div>
-
-          {selectedPlatform === "MOHEEM" && (
-            <div style={styles.packTypeBox}>
-              <strong>MOHEEM 팩 유형 선택</strong>
-
-              <div style={styles.platformButtonGroup}>
-                <button
-                  type="button"
-                  onClick={() => changeMoheemPackType("PLUS")}
-                  style={{
-                    ...styles.platformButton,
-                    background:
-                      moheemPackType === "PLUS"
-                        ? "linear-gradient(135deg, #ffb5cb 0%, #d8b8ff 100%)"
-                        : "#fff",
-                    color: moheemPackType === "PLUS" ? "#fff" : "#6c5e5e",
-                    borderColor: moheemPackType === "PLUS" ? "#fff" : "#eed7df",
-                  }}
-                >
-                  플러스팩
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => changeMoheemPackType("BASIC")}
-                  style={{
-                    ...styles.platformButton,
-                    background:
-                      moheemPackType === "BASIC"
-                        ? "linear-gradient(135deg, #ffb5cb 0%, #d8b8ff 100%)"
-                        : "#fff",
-                    color: moheemPackType === "BASIC" ? "#fff" : "#6c5e5e",
-                    borderColor:
-                      moheemPackType === "BASIC" ? "#fff" : "#eed7df",
-                  }}
-                >
-                  베이직팩
-                </button>
-              </div>
-
-              <p style={styles.prepareText}>
-                MOHEEM 베이직팩은 1개부터 테스트할 수 있습니다. 플러스팩은 24개
-                이상일 때 변환할 수 있습니다.
-              </p>
-            </div>
-          )}
-
-          {platformSpecError && (
-            <div style={styles.errorBox}>
-              규격 조회 오류: {platformSpecError}
-            </div>
-          )}
-        </section>
-
-        <section style={styles.card}>
-          <div style={styles.cardHeader}>
-            <span style={styles.stepNumber}>1</span>
-            <div>
-              <h2 style={styles.cardTitle}>프로젝트 생성</h2>
-              <p style={styles.cardDescription}>
-                작업할 이모티콘 프로젝트 정보를 먼저 생성합니다.
-              </p>
-            </div>
-          </div>
-
-          <div style={styles.formGrid}>
-            <label style={styles.label}>
-              프로젝트명
-              <input
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.label}>
-              캐릭터명
-              <input
-                value={characterName}
-                onChange={(e) => setCharacterName(e.target.value)}
-                style={styles.input}
-              />
-            </label>
-
-            <label style={styles.label}>
-              플랫폼
-              <input
-                value={
-                  selectedPlatform === "MOHEEM"
-                    ? platformSpecKey
-                    : selectedPlatform
-                }
-                disabled
-                style={styles.disabledInput}
-              />
-            </label>
-
-            <label style={styles.label}>
-              업로드 방식
-              <input
-                value="개별 이미지 업로드"
-                disabled
-                style={styles.disabledInput}
-              />
-            </label>
-          </div>
-
-          <button onClick={createProject} style={styles.primaryButton}>
-            프로젝트 만들기
-          </button>
-
-          {project && (
-            <div style={styles.resultBox}>
-              <h3>프로젝트 생성 성공</h3>
-              <p>프로젝트 번호: {project.id}</p>
-              <p>프로젝트명: {project.projectName}</p>
-              <p>캐릭터명: {project.characterName}</p>
-              <p>상태: {project.status}</p>
-            </div>
-          )}
-        </section>
-
-        {project && (
+        {activeMenu === "GUIDE" && (
           <section style={styles.card}>
             <div style={styles.cardHeader}>
-              <span style={styles.stepNumber}>2</span>
+              <span style={styles.stepNumber}>?</span>
               <div>
-                <h2 style={styles.cardTitle}>이미지 업로드 / 위치 조정</h2>
+                <h2 style={styles.cardTitle}>이용방법</h2>
                 <p style={styles.cardDescription}>
-                  이미지를 선택한 뒤 필요하면 위치 조정으로 확대, 이동, 배경을
-                  수정할 수 있습니다.
+                  처음 사용하는 분도 순서대로 따라갈 수 있도록 핵심 흐름만
+                  정리했습니다.
                 </p>
               </div>
             </div>
 
-            <div style={styles.uploadBox}>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png, image/jpeg"
-                multiple
-                onChange={handleFileChange}
-              />
-              <p>선택된 파일 수: {selectedFiles.length}개</p>
+            <div style={styles.quickGuideGrid}>
+              <div style={styles.quickGuideCard}>
+                <span style={styles.quickGuideIcon}>🌷</span>
+                <strong>1. 프로젝트 생성</strong>
+                <p>프로젝트 생성 메뉴에서 플랫폼과 캐릭터 정보를 입력합니다.</p>
+              </div>
+              <div style={styles.quickGuideCard}>
+                <span style={styles.quickGuideIcon}>🖼️</span>
+                <strong>2. 이미지 선택</strong>
+                <p>
+                  이모티콘 이미지를 선택하고 순서, 삭제, 위치 조정을 합니다.
+                </p>
+              </div>
+              <div style={styles.quickGuideCard}>
+                <span style={styles.quickGuideIcon}>✨</span>
+                <strong>3. 규격 변환</strong>
+                <p>선택한 플랫폼 규격에 맞게 이미지를 자동 변환합니다.</p>
+              </div>
+              <div style={styles.quickGuideCard}>
+                <span style={styles.quickGuideIcon}>📦</span>
+                <strong>4. 검수 후 다운로드</strong>
+                <p>대표 이미지 생성, 검수, ZIP 다운로드까지 진행합니다.</p>
+              </div>
             </div>
 
-            <div style={styles.publicLimitBox}>
-              <strong>업로드 전 확인해주세요</strong>
-              <p>1회 최대 40장까지 업로드할 수 있습니다.</p>
-              <p>이미지 1장당 최대 용량은 1MB입니다.</p>
-              <p>PNG, JPG, JPEG 파일만 사용할 수 있습니다.</p>
-              <p>
-                업로드한 이미지와 변환 파일, ZIP 파일은 1시간 후 자동
-                삭제됩니다.
-              </p>
+            <div style={styles.guideBox}>
+              {[
+                [
+                  "1",
+                  "프로젝트 생성 메뉴로 이동",
+                  "실제 작업은 프로젝트 생성 메뉴 안에서 진행합니다.",
+                ],
+                [
+                  "2",
+                  "플랫폼 선택",
+                  "OGQ, KAKAO, LINE, MOHEEM 중 제출할 플랫폼을 선택합니다.",
+                ],
+                [
+                  "3",
+                  "프로젝트 만들기",
+                  "프로젝트명과 캐릭터명을 입력하고 프로젝트를 생성합니다.",
+                ],
+                [
+                  "4",
+                  "이미지 업로드 / 위치 조정",
+                  "이미지를 선택하고 순서 변경, 삭제, 위치 조정을 진행합니다.",
+                ],
+                [
+                  "5",
+                  "규격 변환 / 대표 이미지 / 검수",
+                  "플랫폼 규격으로 변환하고 대표 이미지와 검수 결과를 확인합니다.",
+                ],
+                [
+                  "6",
+                  "ZIP 다운로드",
+                  "최종 제출 파일을 ZIP으로 다운로드합니다.",
+                ],
+              ].map(([number, title, description]) => (
+                <div key={number} style={styles.guideItem}>
+                  <span style={styles.guideStep}>{number}</span>
+                  <div>
+                    <strong>{title}</strong>
+                    <p>{description}</p>
+                  </div>
+                </div>
+              ))}
             </div>
 
-            {selectedFiles.length > 0 && (
-              <button
-                type="button"
-                onClick={clearSelectedImages}
-                style={styles.resetButton}
-              >
-                선택 이미지 전체 초기화
-              </button>
-            )}
-
-            <div style={styles.countBox}>
+            <div style={styles.freeTrialGuideBoxCompact}>
               <div>
-                <strong>{getPackTypeText()} 업로드 현황</strong>
-                <p style={styles.countText}>
-                  현재 {selectedCount} / {getStickerCountText()} 선택
+                <p style={styles.freeTrialBadge}>FREE TRIAL</p>
+                <h3 style={styles.freeTrialTitle}>무료 체험 공개 버전 안내</h3>
+                <p style={styles.freeTrialDescription}>
+                  로그인 없이 사용할 수 있지만, 서버 보호를 위해 업로드 용량과
+                  변환 횟수에 제한이 있습니다.
                 </p>
               </div>
 
-              {isExactRequiredCount && selectedCount > 0 && (
-                <span style={styles.countGood}>개수 조건 충족</span>
-              )}
+              <div style={styles.freeTrialGrid}>
+                <div style={styles.freeTrialItem}>
+                  <span style={styles.freeTrialIcon}>🖼️</span>
+                  <strong>1회 최대 40장</strong>
+                  <p>한 번에 업로드할 수 있는 이미지 개수입니다.</p>
+                </div>
+                <div style={styles.freeTrialItem}>
+                  <span style={styles.freeTrialIcon}>📦</span>
+                  <strong>이미지 1장 최대 1MB</strong>
+                  <p>PNG, JPG, JPEG 파일만 업로드할 수 있습니다.</p>
+                </div>
+                <div style={styles.freeTrialItem}>
+                  <span style={styles.freeTrialIcon}>🔁</span>
+                  <strong>하루 변환 5회</strong>
+                  <p>
+                    같은 접속 환경 기준으로 하루 최대 5회 변환할 수 있습니다.
+                  </p>
+                </div>
+                <div style={styles.freeTrialItem}>
+                  <span style={styles.freeTrialIcon}>⏰</span>
+                  <strong>1시간 후 자동 삭제</strong>
+                  <p>업로드 이미지, 변환 파일, ZIP 파일은 자동 삭제됩니다.</p>
+                </div>
+              </div>
 
-              {isTestMode && (
-                <span style={styles.countWarn}>{lackCount}개 부족</span>
-              )}
+              <div style={styles.usageStatusBox}>
+                <div>
+                  <strong>오늘의 무료 변환 사용량</strong>
 
-              {isOverCount && (
-                <span style={styles.countBad}>{overCount}개 초과</span>
-              )}
+                  {usageStatus ? (
+                    <p style={styles.usageStatusText}>
+                      {usageStatus.usedCount} / {usageStatus.dailyLimit}회 사용
+                      · 남은 횟수 {usageStatus.remainingCount}회
+                    </p>
+                  ) : (
+                    <p style={styles.usageStatusText}>
+                      무료 변환 사용량 정보를 불러오는 중입니다.
+                    </p>
+                  )}
+
+                  {usageStatusError && (
+                    <p style={styles.usageStatusError}>{usageStatusError}</p>
+                  )}
+                </div>
+
+                {usageStatus && (
+                  <span
+                    style={{
+                      ...styles.usageStatusBadge,
+                      backgroundColor: usageStatus.available
+                        ? "#eefced"
+                        : "#fff1f5",
+                      color: usageStatus.available ? "#4f8c63" : "#d26081",
+                      borderColor: usageStatus.available
+                        ? "#cce8d3"
+                        : "#f8d0db",
+                    }}
+                  >
+                    {usageStatus.available ? "변환 가능" : "오늘 횟수 소진"}
+                  </span>
+                )}
+              </div>
             </div>
+          </section>
+        )}
 
-            {previewImages.length > 0 && (
-              <div style={styles.previewSection}>
-                <h3>{getPackTypeText()} 업로드 보드</h3>
-                <p style={styles.helperText}>
-                  이미지를 클릭하면 대표컷으로 선택됩니다. “위치 조정” 버튼으로
-                  캐릭터 위치와 여백을 맞출 수 있습니다.
-                </p>
+        {activeMenu === "CREATE" && (
+          <>
+            <section style={styles.card}>
+              <div style={styles.cardHeader}>
+                <span style={styles.stepNumber}>0</span>
+                <div>
+                  <h2 style={styles.cardTitle}>플랫폼 선택</h2>
+                  <p style={styles.cardDescription}>
+                    제출하려는 플랫폼을 선택하면 필요한 이미지 크기, 개수, 대표
+                    이미지 규격이 자동으로 표시됩니다.
+                  </p>
+                </div>
+              </div>
 
-                <div style={styles.slotGrid}>
-                  {slotItems.map((slot) => (
-                    <div
-                      key={slot.slotNumber}
-                      onClick={() => selectRepresentativeSlot(slot)}
+              <div style={styles.platformButtonGroup}>
+                {["OGQ", "KAKAO", "LINE", "MOHEEM"].map((platformName) => (
+                  <button
+                    key={platformName}
+                    type="button"
+                    onClick={() => changePlatform(platformName)}
+                    style={{
+                      ...styles.platformButton,
+                      background:
+                        selectedPlatform === platformName
+                          ? "linear-gradient(135deg, #ffb5cb 0%, #d8b8ff 100%)"
+                          : "#fff",
+                      color:
+                        selectedPlatform === platformName ? "#fff" : "#6c5e5e",
+                      borderColor:
+                        selectedPlatform === platformName
+                          ? "#ffffff"
+                          : "#eed7df",
+                    }}
+                  >
+                    {platformName}
+                  </button>
+                ))}
+              </div>
+
+              {selectedPlatform === "MOHEEM" && (
+                <div style={styles.packTypeBox}>
+                  <strong>MOHEEM 팩 유형 선택</strong>
+
+                  <div style={styles.platformButtonGroup}>
+                    <button
+                      type="button"
+                      onClick={() => changeMoheemPackType("PLUS")}
                       style={{
-                        ...styles.slotCard,
-                        cursor: slot.image ? "pointer" : "default",
+                        ...styles.platformButton,
+                        background:
+                          moheemPackType === "PLUS"
+                            ? "linear-gradient(135deg, #ffb5cb 0%, #d8b8ff 100%)"
+                            : "#fff",
+                        color: moheemPackType === "PLUS" ? "#fff" : "#6c5e5e",
                         borderColor:
-                          selectedOrder === slot.slotNumber
-                            ? "#ff9eb8"
-                            : slot.image
-                              ? "#bdeec8"
-                              : "#f0dfe5",
-                        borderWidth:
-                          selectedOrder === slot.slotNumber ? "3px" : "2px",
-                        backgroundColor:
-                          selectedOrder === slot.slotNumber
-                            ? "#fff6f9"
-                            : slot.image
-                              ? "#fbfffb"
-                              : "#fffefd",
+                          moheemPackType === "PLUS" ? "#fff" : "#eed7df",
                       }}
                     >
-                      <div style={styles.slotNumber}>{slot.slotNumber}</div>
+                      플러스팩
+                    </button>
 
-                      {slot.image ? (
-                        <>
-                          {selectedOrder === slot.slotNumber && (
-                            <div style={styles.selectedBadge}>대표컷</div>
+                    <button
+                      type="button"
+                      onClick={() => changeMoheemPackType("BASIC")}
+                      style={{
+                        ...styles.platformButton,
+                        background:
+                          moheemPackType === "BASIC"
+                            ? "linear-gradient(135deg, #ffb5cb 0%, #d8b8ff 100%)"
+                            : "#fff",
+                        color: moheemPackType === "BASIC" ? "#fff" : "#6c5e5e",
+                        borderColor:
+                          moheemPackType === "BASIC" ? "#fff" : "#eed7df",
+                      }}
+                    >
+                      베이직팩
+                    </button>
+                  </div>
+
+                  <p style={styles.prepareText}>
+                    MOHEEM 베이직팩은 1개부터 테스트할 수 있습니다. 플러스팩은
+                    24개 이상일 때 변환할 수 있습니다.
+                  </p>
+                </div>
+              )}
+
+              {platformSpecError && (
+                <div style={styles.errorBox}>
+                  규격 조회 오류: {platformSpecError}
+                </div>
+              )}
+            </section>
+
+            <section style={styles.platformSummaryCardInside}>
+              <div>
+                <p style={styles.summaryEyebrow}>현재 제작 설정</p>
+                <h2 style={styles.summaryTitle}>{getPackTypeText()}</h2>
+                <p style={styles.summaryDescription}>
+                  {getPlatformGuideText()}
+                </p>
+              </div>
+
+              {platformSpec && (
+                <div style={styles.summaryGrid}>
+                  {getCurrentPlatformSummary().map((item) => (
+                    <div key={item.label} style={styles.summaryItem}>
+                      <span style={styles.summaryLabel}>{item.label}</span>
+                      <strong style={styles.summaryValue}>{item.value}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section style={styles.card}>
+              <div style={styles.cardHeader}>
+                <span style={styles.stepNumber}>1</span>
+                <div>
+                  <h2 style={styles.cardTitle}>프로젝트 생성</h2>
+                  <p style={styles.cardDescription}>
+                    작업할 이모티콘 프로젝트 정보를 먼저 생성합니다.
+                  </p>
+                </div>
+              </div>
+
+              <div style={styles.formGrid}>
+                <label style={styles.label}>
+                  프로젝트명
+                  <input
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    style={styles.input}
+                  />
+                </label>
+
+                <label style={styles.label}>
+                  캐릭터명
+                  <input
+                    value={characterName}
+                    onChange={(e) => setCharacterName(e.target.value)}
+                    style={styles.input}
+                  />
+                </label>
+
+                <label style={styles.label}>
+                  플랫폼
+                  <input
+                    value={
+                      selectedPlatform === "MOHEEM"
+                        ? platformSpecKey
+                        : selectedPlatform
+                    }
+                    disabled
+                    style={styles.disabledInput}
+                  />
+                </label>
+
+                <label style={styles.label}>
+                  업로드 방식
+                  <input
+                    value="개별 이미지 업로드"
+                    disabled
+                    style={styles.disabledInput}
+                  />
+                </label>
+              </div>
+
+              <button onClick={createProject} style={styles.primaryButton}>
+                프로젝트 만들기
+              </button>
+
+              {project && (
+                <div style={styles.resultBox}>
+                  <h3>프로젝트 생성 성공</h3>
+                  <p>프로젝트 번호: {project.id}</p>
+                  <p>프로젝트명: {project.projectName}</p>
+                  <p>캐릭터명: {project.characterName}</p>
+                  <p>상태: {project.status}</p>
+                </div>
+              )}
+            </section>
+
+            {project && (
+              <section style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <span style={styles.stepNumber}>2</span>
+                  <div>
+                    <h2 style={styles.cardTitle}>이미지 업로드 / 위치 조정</h2>
+                    <p style={styles.cardDescription}>
+                      이미지를 선택한 뒤 필요하면 위치 조정으로 확대, 이동,
+                      배경을 수정할 수 있습니다.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={styles.uploadBox}>
+                  <input
+                    type="file"
+                    accept="image/png, image/jpeg"
+                    multiple
+                    onChange={handleFileChange}
+                  />
+                  <p>선택된 파일 수: {selectedFiles.length}개</p>
+                </div>
+
+                <div style={styles.publicLimitBox}>
+                  <strong>업로드 전 확인해주세요</strong>
+                  <p>1회 최대 40장까지 업로드할 수 있습니다.</p>
+                  <p>이미지 1장당 최대 용량은 1MB입니다.</p>
+                  <p>PNG, JPG, JPEG 파일만 사용할 수 있습니다.</p>
+                  <p>
+                    업로드한 이미지와 변환 파일, ZIP 파일은 1시간 후 자동
+                    삭제됩니다.
+                  </p>
+                </div>
+
+                {selectedFiles.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearSelectedImages}
+                    style={styles.resetButton}
+                  >
+                    선택 이미지 전체 초기화
+                  </button>
+                )}
+
+                <div style={styles.countBox}>
+                  <div>
+                    <strong>{getPackTypeText()} 업로드 현황</strong>
+                    <p style={styles.countText}>
+                      현재 {selectedCount} / {getStickerCountText()} 선택
+                    </p>
+                  </div>
+
+                  {isExactRequiredCount && selectedCount > 0 && (
+                    <span style={styles.countGood}>개수 조건 충족</span>
+                  )}
+
+                  {isTestMode && (
+                    <span style={styles.countWarn}>{lackCount}개 부족</span>
+                  )}
+
+                  {isOverCount && (
+                    <span style={styles.countBad}>{overCount}개 초과</span>
+                  )}
+                </div>
+
+                {previewImages.length > 0 && (
+                  <div style={styles.previewSection}>
+                    <h3>{getPackTypeText()} 업로드 보드</h3>
+                    <p style={styles.helperText}>
+                      이미지를 클릭하면 대표컷으로 선택됩니다. “위치 조정”
+                      버튼으로 캐릭터 위치와 여백을 맞출 수 있습니다.
+                    </p>
+
+                    <div style={styles.slotGrid}>
+                      {slotItems.map((slot) => (
+                        <div
+                          key={slot.slotNumber}
+                          onClick={() => selectRepresentativeSlot(slot)}
+                          style={{
+                            ...styles.slotCard,
+                            cursor: slot.image ? "pointer" : "default",
+                            borderColor:
+                              selectedOrder === slot.slotNumber
+                                ? "#ff9eb8"
+                                : slot.image
+                                  ? "#bdeec8"
+                                  : "#f0dfe5",
+                            borderWidth:
+                              selectedOrder === slot.slotNumber ? "3px" : "2px",
+                            backgroundColor:
+                              selectedOrder === slot.slotNumber
+                                ? "#fff6f9"
+                                : slot.image
+                                  ? "#fbfffb"
+                                  : "#fffefd",
+                          }}
+                        >
+                          <div style={styles.slotNumber}>{slot.slotNumber}</div>
+
+                          {slot.image ? (
+                            <>
+                              {selectedOrder === slot.slotNumber && (
+                                <div style={styles.selectedBadge}>대표컷</div>
+                              )}
+
+                              <img
+                                src={slot.image.url}
+                                alt={slot.image.name}
+                                style={styles.slotImage}
+                              />
+
+                              <p style={styles.slotName}>{slot.image.name}</p>
+
+                              <p style={styles.previewSize}>
+                                {(slot.image.size / 1024).toFixed(1)} KB
+                              </p>
+
+                              <div style={styles.moveButtonGroup}>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    moveImage(
+                                      slot.slotNumber - 1,
+                                      slot.slotNumber - 2,
+                                    );
+                                  }}
+                                  disabled={slot.slotNumber === 1}
+                                  style={{
+                                    ...styles.moveButton,
+                                    opacity: slot.slotNumber === 1 ? 0.4 : 1,
+                                  }}
+                                >
+                                  ← 앞으로
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    moveImage(
+                                      slot.slotNumber - 1,
+                                      slot.slotNumber,
+                                    );
+                                  }}
+                                  disabled={
+                                    slot.slotNumber === selectedFiles.length
+                                  }
+                                  style={{
+                                    ...styles.moveButton,
+                                    opacity:
+                                      slot.slotNumber === selectedFiles.length
+                                        ? 0.4
+                                        : 1,
+                                  }}
+                                >
+                                  뒤로 →
+                                </button>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openImageEditor(slot.slotNumber - 1);
+                                }}
+                                style={styles.editButton}
+                              >
+                                위치 조정
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  deleteImage(slot.slotNumber - 1);
+                                }}
+                                style={styles.deleteButton}
+                              >
+                                삭제
+                              </button>
+                            </>
+                          ) : (
+                            <div style={styles.emptySlot}>비어 있음</div>
                           )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                          <img
-                            src={slot.image.url}
-                            alt={slot.image.name}
-                            style={styles.slotImage}
-                          />
+                <button onClick={uploadImages} style={styles.darkButton}>
+                  이미지 업로드
+                </button>
 
-                          <p style={styles.slotName}>{slot.image.name}</p>
+                {uploadedImages.length > 0 && (
+                  <DataTable
+                    title="업로드 결과"
+                    columns={[
+                      "순서",
+                      "원본 파일명",
+                      "가로",
+                      "세로",
+                      "형식",
+                      "용량",
+                    ]}
+                    rows={uploadedImages.map((image) => [
+                      image.sortOrder,
+                      image.originalFileName,
+                      image.width,
+                      image.height,
+                      image.format,
+                      `${image.fileSize} bytes`,
+                    ])}
+                  />
+                )}
+              </section>
+            )}
 
-                          <p style={styles.previewSize}>
-                            {(slot.image.size / 1024).toFixed(1)} KB
-                          </p>
+            {uploadedImages.length > 0 && (
+              <section style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <span style={styles.stepNumber}>3</span>
+                  <div>
+                    <h2 style={styles.cardTitle}>
+                      {getPackTypeText()} 규격 변환
+                    </h2>
+                    <p style={styles.cardDescription}>
+                      업로드한 이미지를 {getPackTypeText()} 스티커 규격으로
+                      변환합니다.
+                    </p>
+                  </div>
+                </div>
 
-                          <div style={styles.moveButtonGroup}>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                moveImage(
-                                  slot.slotNumber - 1,
-                                  slot.slotNumber - 2,
-                                );
-                              }}
-                              disabled={slot.slotNumber === 1}
-                              style={{
-                                ...styles.moveButton,
-                                opacity: slot.slotNumber === 1 ? 0.4 : 1,
-                              }}
-                            >
-                              ← 앞으로
-                            </button>
+                <div style={styles.convertNoticeBox}>
+                  {platformSpec ? (
+                    <p>
+                      현재 {getPackTypeText()} 스티커 규격은{" "}
+                      {platformSpec.stickerWidth} × {platformSpec.stickerHeight}
+                      입니다.
+                    </p>
+                  ) : (
+                    <p>플랫폼 규격 정보를 불러오는 중입니다.</p>
+                  )}
+                </div>
 
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                moveImage(slot.slotNumber - 1, slot.slotNumber);
-                              }}
-                              disabled={
-                                slot.slotNumber === selectedFiles.length
-                              }
-                              style={{
-                                ...styles.moveButton,
-                                opacity:
-                                  slot.slotNumber === selectedFiles.length
-                                    ? 0.4
-                                    : 1,
-                              }}
-                            >
-                              뒤로 →
-                            </button>
+                <button onClick={convertByPlatform} style={styles.blueButton}>
+                  {getConvertButtonText()}
+                </button>
+
+                {convertedImages.length > 0 && (
+                  <>
+                    <DataTable
+                      title={`${getPackTypeText()} 변환 결과`}
+                      columns={[
+                        "순서",
+                        "파일명",
+                        "구분",
+                        "가로",
+                        "세로",
+                        "용량",
+                      ]}
+                      rows={convertedImages.map((image) => [
+                        image.sortOrder,
+                        image.convertedFileName,
+                        image.itemType,
+                        image.width,
+                        image.height,
+                        `${image.fileSize} bytes`,
+                      ])}
+                    />
+
+                    <div style={styles.convertedPreviewSection}>
+                      <h3>{getPackTypeText()} 변환 이미지 미리보기</h3>
+
+                      <div style={styles.convertedPreviewGrid}>
+                        {convertedImages.map((image) => (
+                          <div
+                            key={image.id}
+                            style={styles.convertedPreviewCard}
+                          >
+                            <div style={styles.previewNumber}>
+                              {image.sortOrder}
+                            </div>
+
+                            <img
+                              src={getConvertedImageUrl(
+                                image.convertedFileName,
+                              )}
+                              alt={image.convertedFileName}
+                              style={styles.convertedPreviewImage}
+                            />
+
+                            <p style={styles.previewName}>
+                              {image.convertedFileName}
+                            </p>
+                            <p style={styles.previewSize}>
+                              {image.width} × {image.height}
+                            </p>
                           </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </section>
+            )}
 
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openImageEditor(slot.slotNumber - 1);
-                            }}
-                            style={styles.editButton}
-                          >
-                            위치 조정
-                          </button>
+            {convertedImages.length > 0 && (
+              <section style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <span style={styles.stepNumber}>4</span>
+                  <div>
+                    <h2 style={styles.cardTitle}>
+                      {getRepresentativeTitleText()}
+                    </h2>
+                    <p style={styles.cardDescription}>
+                      {getRepresentativeDescriptionText()}
+                    </p>
+                  </div>
+                </div>
 
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              deleteImage(slot.slotNumber - 1);
-                            }}
-                            style={styles.deleteButton}
-                          >
-                            삭제
-                          </button>
-                        </>
+                <label style={styles.label}>
+                  대표컷 번호
+                  <input
+                    type="number"
+                    min="1"
+                    max={slotCount}
+                    value={selectedOrder}
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      setSelectedOrder(value);
+                      setRepresentativeResult(null);
+                      setValidationResult(null);
+                      setMessage(
+                        `${value}번 이미지를 대표컷으로 선택했습니다.`,
+                      );
+                    }}
+                    style={{ ...styles.input, width: "120px" }}
+                  />
+                </label>
+
+                <p style={styles.helperText}>
+                  현재 선택된 대표컷: {selectedOrder}번
+                </p>
+
+                <RepresentativePreview
+                  image={getSelectedRepresentativePreviewImage()}
+                  platformName={getPackTypeText()}
+                  mainWidth={platformSpec?.mainWidth || 240}
+                  mainHeight={platformSpec?.mainHeight || 240}
+                  tabWidth={platformSpec?.tabWidth || 96}
+                  tabHeight={platformSpec?.tabHeight || 74}
+                  tabImageRequired={platformSpec?.tabImageRequired ?? true}
+                />
+
+                <button
+                  onClick={createRepresentativeImages}
+                  style={styles.greenButton}
+                >
+                  {getRepresentativeButtonText()}
+                </button>
+
+                {representativeResult && (
+                  <DataTable
+                    title="대표 이미지 생성 결과"
+                    columns={["구분", "파일명", "가로", "세로", "용량"]}
+                    rows={[
+                      [
+                        representativeResult.mainImage.itemType,
+                        representativeResult.mainImage.convertedFileName,
+                        representativeResult.mainImage.width,
+                        representativeResult.mainImage.height,
+                        `${representativeResult.mainImage.fileSize} bytes`,
+                      ],
+                      representativeResult.tabImage
+                        ? [
+                            representativeResult.tabImage.itemType,
+                            representativeResult.tabImage.convertedFileName,
+                            representativeResult.tabImage.width,
+                            representativeResult.tabImage.height,
+                            `${representativeResult.tabImage.fileSize} bytes`,
+                          ]
+                        : ["TAB", "없음", "-", "-", "-"],
+                    ]}
+                  />
+                )}
+              </section>
+            )}
+
+            {representativeResult && (
+              <section style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <span style={styles.stepNumber}>5</span>
+                  <div>
+                    <h2 style={styles.cardTitle}>
+                      {getShortPlatformText()} 제출 전 검수
+                    </h2>
+                    <p style={styles.cardDescription}>
+                      파일 개수, 크기, 형식, 용량을 자동으로 검사합니다.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={validateByPlatform}
+                  style={styles.purpleButton}
+                >
+                  {getValidationButtonText()}
+                </button>
+
+                {validationResult && (
+                  <>
+                    <div style={styles.validationGuideBox}>
+                      <h3>
+                        {validationResult.valid ? "검수 통과" : "검수 미통과"}
+                      </h3>
+
+                      {validationResult.valid ? (
+                        <p>
+                          모든 기준을 통과했습니다. ZIP 다운로드 후 제출 파일을
+                          확인하세요.
+                        </p>
                       ) : (
-                        <div style={styles.emptySlot}>비어 있음</div>
+                        <p>
+                          아직 최종 제출 조건을 만족하지 못했습니다. 아래 상세
+                          결과에서 오류 항목을 확인하세요.
+                        </p>
+                      )}
+
+                      {validationResult.items
+                        .filter((item) => !item.valid)
+                        .map((item, index) => (
+                          <div key={index} style={styles.validationFailItem}>
+                            <strong>{item.fileName}</strong>
+                            <p>{item.message}</p>
+                            <p>
+                              기준: {item.expected} / 현재: {item.actual}
+                            </p>
+                          </div>
+                        ))}
+                    </div>
+
+                    <div
+                      style={{
+                        ...styles.validationSummary,
+                        backgroundColor: validationResult.valid
+                          ? "#eefced"
+                          : "#fff3f6",
+                      }}
+                    >
+                      <p>
+                        <strong>최종 통과 여부:</strong>{" "}
+                        {validationResult.valid ? "통과" : "미통과"}
+                      </p>
+                      <p>
+                        <strong>총점:</strong> {validationResult.totalScore}점
+                      </p>
+                      <p>
+                        <strong>성공:</strong> {validationResult.successCount}개
+                        / <strong>실패:</strong> {validationResult.failCount}개
+                      </p>
+                    </div>
+
+                    <DataTable
+                      title="검수 상세 결과"
+                      columns={[
+                        "파일명",
+                        "검사항목",
+                        "결과",
+                        "메시지",
+                        "기준",
+                        "현재값",
+                      ]}
+                      rows={validationResult.items.map((item) => [
+                        item.fileName,
+                        item.checkType,
+                        item.valid ? "정상" : "오류",
+                        item.message,
+                        item.expected,
+                        item.actual,
+                      ])}
+                    />
+                  </>
+                )}
+              </section>
+            )}
+
+            {validationResult && (
+              <section style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <span style={styles.stepNumber}>6</span>
+                  <div>
+                    <h2 style={styles.cardTitle}>
+                      최종 제출 파일 확인 / ZIP 다운로드
+                    </h2>
+                    <p style={styles.cardDescription}>
+                      변환된 {getShortPlatformText()} 제출 파일을 확인한 뒤
+                      ZIP으로 다운로드합니다.
+                    </p>
+                  </div>
+                </div>
+
+                <FinalSubmissionPreview
+                  project={project}
+                  platformName={getPackTypeText()}
+                  platformSpec={platformSpec}
+                  convertedImages={convertedImages}
+                  representativeResult={representativeResult}
+                  validationResult={validationResult}
+                  zipFileName={getZipFileName()}
+                  getConvertedImageUrl={getConvertedImageUrl}
+                />
+
+                <button
+                  onClick={downloadPlatformZip}
+                  style={styles.blackButton}
+                >
+                  {getZipButtonText()}
+                </button>
+              </section>
+            )}
+          </>
+        )}
+
+        {activeMenu === "LIST" && (
+          <section style={styles.card}>
+            <div style={styles.cardHeader}>
+              <span style={styles.stepNumber}>목록</span>
+              <div>
+                <h2 style={styles.cardTitle}>프로젝트 목록</h2>
+                <p style={styles.cardDescription}>
+                  로그인한 사용자만 이전 프로젝트 목록을 확인할 수 있습니다.
+                </p>
+              </div>
+            </div>
+
+            {!currentUser ? (
+              <div style={styles.lockedBox}>
+                <strong>로그인이 필요한 기능입니다.</strong>
+                <p>
+                  프로젝트 목록은 회원가입 / 로그인 후 사용할 수 있도록
+                  분리했습니다.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveMenu("LOGIN")}
+                  style={styles.primaryButton}
+                >
+                  회원가입 / 로그인 하러 가기
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={styles.authStatusBox}>
+                  <strong>{currentUser.nickname}님의 프로젝트 목록</strong>
+                  <p>지금까지 생성한 프로젝트를 최신순으로 5개씩 확인합니다.</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={fetchProjectList}
+                  style={styles.secondaryButton}
+                >
+                  {projectListLoading
+                    ? "불러오는 중..."
+                    : "프로젝트 목록 불러오기"}
+                </button>
+
+                {projectListError && (
+                  <div style={styles.errorBox}>오류: {projectListError}</div>
+                )}
+
+                {projectList.length > 0 && (
+                  <>
+                    <div style={styles.projectListBox}>
+                      {pagedProjectList.map((item) => (
+                        <div key={item.id} style={styles.projectListItem}>
+                          <div>
+                            <strong>
+                              #{item.id} {item.projectName}
+                            </strong>
+                            <p style={styles.projectListText}>
+                              캐릭터: {item.characterName || "-"} / 플랫폼:{" "}
+                              {item.targetPlatform || "-"} / 상태:{" "}
+                              {item.status || "-"}
+                            </p>
+                            <p style={styles.projectListDate}>
+                              생성일:{" "}
+                              {item.createdAt
+                                ? item.createdAt.replace("T", " ")
+                                : "-"}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={styles.paginationBox}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setProjectListPage((prev) => Math.max(prev - 1, 1))
+                        }
+                        disabled={projectListPage === 1}
+                        style={{
+                          ...styles.paginationButton,
+                          opacity: projectListPage === 1 ? 0.4 : 1,
+                          cursor:
+                            projectListPage === 1 ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        이전
+                      </button>
+
+                      <span style={styles.paginationText}>
+                        {projectListPage} / {totalProjectPages}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setProjectListPage((prev) =>
+                            Math.min(prev + 1, totalProjectPages),
+                          )
+                        }
+                        disabled={projectListPage === totalProjectPages}
+                        style={{
+                          ...styles.paginationButton,
+                          opacity:
+                            projectListPage === totalProjectPages ? 0.4 : 1,
+                          cursor:
+                            projectListPage === totalProjectPages
+                              ? "not-allowed"
+                              : "pointer",
+                        }}
+                      >
+                        다음
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {projectList.length === 0 && !projectListLoading && (
+                  <p style={styles.helperText}>
+                    아직 불러온 프로젝트가 없습니다. 버튼을 눌러 목록을
+                    조회해보세요.
+                  </p>
+                )}
+              </>
+            )}
+          </section>
+        )}
+
+        {activeMenu === "LOGIN" && (
+          <section style={styles.card}>
+            <div style={styles.cardHeader}>
+              <span style={styles.stepNumber}>회원</span>
+              <div>
+                <h2 style={styles.cardTitle}>회원가입 / 로그인</h2>
+                <p style={styles.cardDescription}>
+                  지금은 프론트 화면 테스트용 회원 기능입니다. 실제 저장과
+                  보안은 다음 단계에서 백엔드로 연결할 예정입니다.
+                </p>
+              </div>
+            </div>
+
+            <div style={styles.authStatusBox}>
+              {currentUser ? (
+                <>
+                  <strong>{currentUser.nickname}님이 로그인 중입니다.</strong>
+                  <p>
+                    로그인한 사용자만 프로젝트 목록을 볼 수 있게 구성했습니다.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    style={styles.smallOutlineButton}
+                  >
+                    로그아웃
+                  </button>
+                </>
+              ) : (
+                <>
+                  <strong>현재 로그인하지 않았습니다.</strong>
+                  <p>
+                    프로젝트 목록은 로그인 후 사용할 수 있도록 잠가두었습니다.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div style={styles.authGrid}>
+              <div style={styles.authPanel}>
+                <h3>회원가입</h3>
+                <label style={styles.label}>
+                  아이디
+                  <input
+                    value={signupUsername}
+                    onChange={(e) => setSignupUsername(e.target.value)}
+                    style={styles.input}
+                    placeholder="예: ketokki"
+                  />
+                </label>
+                <label style={styles.label}>
+                  비밀번호
+                  <input
+                    type="password"
+                    value={signupPassword}
+                    onChange={(e) => setSignupPassword(e.target.value)}
+                    style={styles.input}
+                    placeholder="테스트용 비밀번호"
+                  />
+                </label>
+                <label style={styles.label}>
+                  닉네임
+                  <input
+                    value={signupNickname}
+                    onChange={(e) => setSignupNickname(e.target.value)}
+                    style={styles.input}
+                    placeholder="예: 영우"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleSignup}
+                  style={styles.primaryButton}
+                >
+                  회원가입하기
+                </button>
+              </div>
+
+              <div style={styles.authPanel}>
+                <h3>로그인</h3>
+                <label style={styles.label}>
+                  아이디
+                  <input
+                    value={loginUsername}
+                    onChange={(e) => setLoginUsername(e.target.value)}
+                    style={styles.input}
+                    placeholder="가입한 아이디"
+                  />
+                </label>
+                <label style={styles.label}>
+                  비밀번호
+                  <input
+                    type="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    style={styles.input}
+                    placeholder="가입한 비밀번호"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleLogin}
+                  style={styles.greenButton}
+                >
+                  로그인하기
+                </button>
+              </div>
+            </div>
+
+            <div style={styles.memberListBox}>
+              <h3>가입한 사람 / 로그인 상태</h3>
+              {members.length === 0 ? (
+                <p style={styles.helperText}>
+                  아직 가입한 테스트 회원이 없습니다.
+                </p>
+              ) : (
+                <div style={styles.memberGrid}>
+                  {members.map((member) => (
+                    <div key={member.id} style={styles.memberCard}>
+                      <strong>{member.nickname}</strong>
+                      <p>아이디: {member.username}</p>
+                      <p>가입일: {member.createdAt}</p>
+                      {currentUser?.id === member.id && (
+                        <span style={styles.loginBadge}>현재 로그인 중</span>
                       )}
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-
-            <button onClick={uploadImages} style={styles.darkButton}>
-              이미지 업로드
-            </button>
-
-            {uploadedImages.length > 0 && (
-              <DataTable
-                title="업로드 결과"
-                columns={[
-                  "순서",
-                  "원본 파일명",
-                  "가로",
-                  "세로",
-                  "형식",
-                  "용량",
-                ]}
-                rows={uploadedImages.map((image) => [
-                  image.sortOrder,
-                  image.originalFileName,
-                  image.width,
-                  image.height,
-                  image.format,
-                  `${image.fileSize} bytes`,
-                ])}
-              />
-            )}
-          </section>
-        )}
-
-        {uploadedImages.length > 0 && (
-          <section style={styles.card}>
-            <div style={styles.cardHeader}>
-              <span style={styles.stepNumber}>3</span>
-              <div>
-                <h2 style={styles.cardTitle}>{getPackTypeText()} 규격 변환</h2>
-                <p style={styles.cardDescription}>
-                  업로드한 이미지를 {getPackTypeText()} 스티커 규격으로
-                  변환합니다.
-                </p>
-              </div>
-            </div>
-
-            <div style={styles.convertNoticeBox}>
-              {platformSpec ? (
-                <p>
-                  현재 {getPackTypeText()} 스티커 규격은{" "}
-                  {platformSpec.stickerWidth} × {platformSpec.stickerHeight}
-                  입니다.
-                </p>
-              ) : (
-                <p>플랫폼 규격 정보를 불러오는 중입니다.</p>
               )}
             </div>
-
-            <button onClick={convertByPlatform} style={styles.blueButton}>
-              {getConvertButtonText()}
-            </button>
-
-            {convertedImages.length > 0 && (
-              <>
-                <DataTable
-                  title={`${getPackTypeText()} 변환 결과`}
-                  columns={["순서", "파일명", "구분", "가로", "세로", "용량"]}
-                  rows={convertedImages.map((image) => [
-                    image.sortOrder,
-                    image.convertedFileName,
-                    image.itemType,
-                    image.width,
-                    image.height,
-                    `${image.fileSize} bytes`,
-                  ])}
-                />
-
-                <div style={styles.convertedPreviewSection}>
-                  <h3>{getPackTypeText()} 변환 이미지 미리보기</h3>
-
-                  <div style={styles.convertedPreviewGrid}>
-                    {convertedImages.map((image) => (
-                      <div key={image.id} style={styles.convertedPreviewCard}>
-                        <div style={styles.previewNumber}>
-                          {image.sortOrder}
-                        </div>
-
-                        <img
-                          src={getConvertedImageUrl(image.convertedFileName)}
-                          alt={image.convertedFileName}
-                          style={styles.convertedPreviewImage}
-                        />
-
-                        <p style={styles.previewName}>
-                          {image.convertedFileName}
-                        </p>
-                        <p style={styles.previewSize}>
-                          {image.width} × {image.height}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </section>
-        )}
-
-        {convertedImages.length > 0 && (
-          <section style={styles.card}>
-            <div style={styles.cardHeader}>
-              <span style={styles.stepNumber}>4</span>
-              <div>
-                <h2 style={styles.cardTitle}>{getRepresentativeTitleText()}</h2>
-                <p style={styles.cardDescription}>
-                  {getRepresentativeDescriptionText()}
-                </p>
-              </div>
-            </div>
-
-            <label style={styles.label}>
-              대표컷 번호
-              <input
-                type="number"
-                min="1"
-                max={slotCount}
-                value={selectedOrder}
-                onChange={(e) => {
-                  const value = Number(e.target.value);
-                  setSelectedOrder(value);
-                  setRepresentativeResult(null);
-                  setValidationResult(null);
-                  setMessage(`${value}번 이미지를 대표컷으로 선택했습니다.`);
-                }}
-                style={{ ...styles.input, width: "120px" }}
-              />
-            </label>
-
-            <p style={styles.helperText}>
-              현재 선택된 대표컷: {selectedOrder}번
-            </p>
-
-            <RepresentativePreview
-              image={getSelectedRepresentativePreviewImage()}
-              platformName={getPackTypeText()}
-              mainWidth={platformSpec?.mainWidth || 240}
-              mainHeight={platformSpec?.mainHeight || 240}
-              tabWidth={platformSpec?.tabWidth || 96}
-              tabHeight={platformSpec?.tabHeight || 74}
-              tabImageRequired={platformSpec?.tabImageRequired ?? true}
-            />
-
-            <button
-              onClick={createRepresentativeImages}
-              style={styles.greenButton}
-            >
-              {getRepresentativeButtonText()}
-            </button>
-
-            {representativeResult && (
-              <DataTable
-                title="대표 이미지 생성 결과"
-                columns={["구분", "파일명", "가로", "세로", "용량"]}
-                rows={[
-                  [
-                    representativeResult.mainImage.itemType,
-                    representativeResult.mainImage.convertedFileName,
-                    representativeResult.mainImage.width,
-                    representativeResult.mainImage.height,
-                    `${representativeResult.mainImage.fileSize} bytes`,
-                  ],
-                  representativeResult.tabImage
-                    ? [
-                        representativeResult.tabImage.itemType,
-                        representativeResult.tabImage.convertedFileName,
-                        representativeResult.tabImage.width,
-                        representativeResult.tabImage.height,
-                        `${representativeResult.tabImage.fileSize} bytes`,
-                      ]
-                    : ["TAB", "없음", "-", "-", "-"],
-                ]}
-              />
-            )}
-          </section>
-        )}
-
-        {representativeResult && (
-          <section style={styles.card}>
-            <div style={styles.cardHeader}>
-              <span style={styles.stepNumber}>5</span>
-              <div>
-                <h2 style={styles.cardTitle}>
-                  {getShortPlatformText()} 제출 전 검수
-                </h2>
-                <p style={styles.cardDescription}>
-                  파일 개수, 크기, 형식, 용량을 자동으로 검사합니다.
-                </p>
-              </div>
-            </div>
-
-            <button onClick={validateByPlatform} style={styles.purpleButton}>
-              {getValidationButtonText()}
-            </button>
-
-            {validationResult && (
-              <>
-                <div style={styles.validationGuideBox}>
-                  <h3>
-                    {validationResult.valid ? "검수 통과" : "검수 미통과"}
-                  </h3>
-
-                  {validationResult.valid ? (
-                    <p>
-                      모든 기준을 통과했습니다. ZIP 다운로드 후 제출 파일을
-                      확인하세요.
-                    </p>
-                  ) : (
-                    <p>
-                      아직 최종 제출 조건을 만족하지 못했습니다. 아래 상세
-                      결과에서 오류 항목을 확인하세요.
-                    </p>
-                  )}
-
-                  {validationResult.items
-                    .filter((item) => !item.valid)
-                    .map((item, index) => (
-                      <div key={index} style={styles.validationFailItem}>
-                        <strong>{item.fileName}</strong>
-                        <p>{item.message}</p>
-                        <p>
-                          기준: {item.expected} / 현재: {item.actual}
-                        </p>
-                      </div>
-                    ))}
-                </div>
-
-                <div
-                  style={{
-                    ...styles.validationSummary,
-                    backgroundColor: validationResult.valid
-                      ? "#eefced"
-                      : "#fff3f6",
-                  }}
-                >
-                  <p>
-                    <strong>최종 통과 여부:</strong>{" "}
-                    {validationResult.valid ? "통과" : "미통과"}
-                  </p>
-                  <p>
-                    <strong>총점:</strong> {validationResult.totalScore}점
-                  </p>
-                  <p>
-                    <strong>성공:</strong> {validationResult.successCount}개 /{" "}
-                    <strong>실패:</strong> {validationResult.failCount}개
-                  </p>
-                </div>
-
-                <DataTable
-                  title="검수 상세 결과"
-                  columns={[
-                    "파일명",
-                    "검사항목",
-                    "결과",
-                    "메시지",
-                    "기준",
-                    "현재값",
-                  ]}
-                  rows={validationResult.items.map((item) => [
-                    item.fileName,
-                    item.checkType,
-                    item.valid ? "정상" : "오류",
-                    item.message,
-                    item.expected,
-                    item.actual,
-                  ])}
-                />
-              </>
-            )}
-          </section>
-        )}
-
-        {validationResult && (
-          <section style={styles.card}>
-            <div style={styles.cardHeader}>
-              <span style={styles.stepNumber}>6</span>
-              <div>
-                <h2 style={styles.cardTitle}>
-                  최종 제출 파일 확인 / ZIP 다운로드
-                </h2>
-                <p style={styles.cardDescription}>
-                  변환된 {getShortPlatformText()} 제출 파일을 확인한 뒤 ZIP으로
-                  다운로드합니다.
-                </p>
-              </div>
-            </div>
-
-            <FinalSubmissionPreview
-              project={project}
-              platformName={getPackTypeText()}
-              platformSpec={platformSpec}
-              convertedImages={convertedImages}
-              representativeResult={representativeResult}
-              validationResult={validationResult}
-              zipFileName={getZipFileName()}
-              getConvertedImageUrl={getConvertedImageUrl}
-            />
-
-            <button onClick={downloadPlatformZip} style={styles.blackButton}>
-              {getZipButtonText()}
-            </button>
           </section>
         )}
 
@@ -2605,6 +3099,240 @@ const styles = {
     marginTop: "16px",
     marginBottom: "20px",
     border: "2px solid #f0dfe5",
+  },
+
+  menuTabBox: {
+    maxWidth: "1120px",
+    margin: "0 auto 24px",
+    padding: "18px 22px",
+    borderRadius: "26px",
+    background:
+      "linear-gradient(135deg, #fff8fb 0%, #fffdf5 50%, #f8f2ff 100%)",
+    border: "2px solid #f3dbe5",
+    boxShadow: "0 10px 24px rgba(218, 189, 197, 0.14)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: "14px",
+    flexWrap: "wrap",
+  },
+
+  menuTabButton: {
+    minWidth: "160px",
+    padding: "14px 22px",
+    border: "2px solid #eed7df",
+    borderRadius: "999px",
+    backgroundColor: "#ffffff",
+    color: "#5f5552",
+    fontSize: "16px",
+    fontWeight: "900",
+    cursor: "pointer",
+    boxShadow: "0 5px 12px rgba(235, 210, 218, 0.14)",
+  },
+
+  menuTabButtonActive: {
+    background: "linear-gradient(135deg, #ff9fbe 0%, #d3a7ff 100%)",
+    color: "#ffffff",
+    borderColor: "#ffffff",
+    boxShadow: "0 8px 18px rgba(224, 151, 195, 0.28)",
+  },
+
+  paginationBox: {
+    marginTop: "18px",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: "12px",
+  },
+
+  paginationButton: {
+    padding: "9px 14px",
+    border: "1.5px solid #f0d8df",
+    borderRadius: "12px",
+    backgroundColor: "#fff",
+    color: "#c2185b",
+    fontWeight: "800",
+    cursor: "pointer",
+  },
+
+  paginationText: {
+    color: "#6c5e5e",
+    fontWeight: "800",
+  },
+
+  prepareBox: {
+    padding: "18px",
+    borderRadius: "18px",
+    backgroundColor: "#fff8df",
+    border: "2px solid #f8e7ae",
+    color: "#756553",
+    lineHeight: 1.7,
+  },
+
+  guideBox: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "14px",
+    marginTop: "18px",
+  },
+
+  guideItem: {
+    display: "grid",
+    gridTemplateColumns: "42px 1fr",
+    gap: "14px",
+    padding: "16px",
+    borderRadius: "18px",
+    backgroundColor: "#fffafc",
+    border: "1.5px solid #f2d5df",
+  },
+
+  guideStep: {
+    width: "36px",
+    height: "36px",
+    borderRadius: "50%",
+    background: "linear-gradient(135deg, #ffb5cb 0%, #d8b8ff 100%)",
+    color: "#fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: "900",
+  },
+
+  guideNoticeBox: {
+    marginTop: "18px",
+    padding: "18px",
+    borderRadius: "18px",
+    backgroundColor: "#fff8df",
+    border: "2px solid #f8e7ae",
+    color: "#756553",
+    lineHeight: 1.7,
+  },
+
+  platformSummaryCardInside: {
+    marginTop: "24px",
+    padding: "24px",
+    borderRadius: "28px",
+    background:
+      "linear-gradient(135deg, #fffefc 0%, #fff5f8 45%, #fdf7ff 100%)",
+    color: "#5f5552",
+    display: "grid",
+    gridTemplateColumns: "1.15fr 1.85fr",
+    gap: "22px",
+    boxShadow: "0 10px 28px rgba(196, 170, 176, 0.12)",
+    border: "2px solid #f8e3ea",
+  },
+
+  quickGuideGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+    gap: "14px",
+    marginBottom: "20px",
+  },
+
+  quickGuideCard: {
+    padding: "18px",
+    borderRadius: "22px",
+    backgroundColor: "#fffafc",
+    border: "1.8px solid #f1dfe6",
+    boxShadow: "0 6px 14px rgba(230, 205, 214, 0.12)",
+    lineHeight: 1.6,
+  },
+
+  quickGuideIcon: {
+    display: "inline-flex",
+    width: "38px",
+    height: "38px",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "50%",
+    background: "linear-gradient(135deg, #ffe0ea 0%, #e7d5ff 100%)",
+    marginBottom: "10px",
+    fontSize: "20px",
+  },
+
+  freeTrialGuideBoxCompact: {
+    marginTop: "20px",
+    padding: "20px",
+    borderRadius: "24px",
+    background:
+      "linear-gradient(135deg, #fff8fb 0%, #fffdf2 45%, #f3fbff 100%)",
+    border: "2px solid #f5dce5",
+  },
+
+  lockedBox: {
+    padding: "24px",
+    borderRadius: "22px",
+    backgroundColor: "#fff8df",
+    border: "2px solid #f8e7ae",
+    color: "#756553",
+    lineHeight: 1.8,
+  },
+
+  authStatusBox: {
+    marginBottom: "18px",
+    padding: "18px",
+    borderRadius: "20px",
+    backgroundColor: "#fff8df",
+    border: "2px solid #f8e7ae",
+    color: "#756553",
+    lineHeight: 1.7,
+  },
+
+  authGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+    gap: "18px",
+  },
+
+  authPanel: {
+    padding: "20px",
+    borderRadius: "22px",
+    backgroundColor: "#fffafc",
+    border: "2px solid #f1dfe6",
+  },
+
+  smallOutlineButton: {
+    marginTop: "10px",
+    padding: "9px 14px",
+    border: "1.5px solid #f0d8df",
+    borderRadius: "12px",
+    backgroundColor: "#fff",
+    color: "#c2185b",
+    fontWeight: "800",
+    cursor: "pointer",
+  },
+
+  memberListBox: {
+    marginTop: "22px",
+    padding: "20px",
+    borderRadius: "22px",
+    backgroundColor: "#fffefd",
+    border: "2px solid #f1dfe6",
+  },
+
+  memberGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: "12px",
+  },
+
+  memberCard: {
+    position: "relative",
+    padding: "16px",
+    borderRadius: "18px",
+    backgroundColor: "#fffafc",
+    border: "1.5px solid #f2d5df",
+  },
+
+  loginBadge: {
+    display: "inline-block",
+    marginTop: "8px",
+    padding: "6px 10px",
+    borderRadius: "999px",
+    backgroundColor: "#eefced",
+    color: "#4f8c63",
+    fontWeight: "900",
+    fontSize: "12px",
   },
 
   creatorSection: {
