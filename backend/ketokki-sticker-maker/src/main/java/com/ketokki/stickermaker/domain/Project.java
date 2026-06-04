@@ -1,10 +1,6 @@
 package com.ketokki.stickermaker.domain;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -18,6 +14,8 @@ public class Project {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    private Long userId;
 
     private String projectName;
 
@@ -33,10 +31,12 @@ public class Project {
 
     @PrePersist
     public void prePersist() {
-        this.createdAt = LocalDateTime.now();
-
         if (this.status == null) {
             this.status = "CREATED";
+        }
+
+        if (this.createdAt == null) {
+            this.createdAt = LocalDateTime.now();
         }
     }
 }

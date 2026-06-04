@@ -7,6 +7,8 @@ import lombok.Setter;
 @Setter
 public class ProjectCreateRequest {
 
+    private Long userId;
+
     private String projectName;
 
     private String characterName;
