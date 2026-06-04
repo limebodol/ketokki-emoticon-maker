@@ -2,6 +2,7 @@ package com.ketokki.stickermaker.controller;
 
 import com.ketokki.stickermaker.domain.Project;
 import com.ketokki.stickermaker.dto.ProjectCreateRequest;
+import com.ketokki.stickermaker.dto.ProjectDetailResponse;
 import com.ketokki.stickermaker.dto.ProjectListResponse;
 import com.ketokki.stickermaker.service.ProjectService;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +23,17 @@ public class ProjectController {
     }
 
     @GetMapping
-    public List<ProjectListResponse> getProjectList(@RequestParam Long userId) {
+    public List<ProjectListResponse> getProjectList(
+            @RequestParam("userId") Long userId
+    ) {
         return projectService.getProjectList(userId);
+    }
+
+    @GetMapping("/{projectId}")
+    public ProjectDetailResponse getProjectDetail(
+            @PathVariable("projectId") Long projectId,
+            @RequestParam("userId") Long userId
+    ) {
+        return projectService.getProjectDetail(projectId, userId);
     }
 }

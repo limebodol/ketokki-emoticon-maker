@@ -4,7 +4,7 @@ import RepresentativePreview from "./RepresentativePreview";
 import FinalSubmissionPreview from "./FinalSubmissionPreview";
 import creatorBanner from "./assets/creator-banner.jpg";
 
-const API_BASE_URL = "http://localhost:8080";
+const API_BASE_URL = "https://배포된-백엔드주소";
 const DEFAULT_OGQ_COUNT = 24;
 const PROJECTS_PER_PAGE = 5;
 
@@ -340,6 +340,58 @@ function App() {
       setError(err.message);
     } finally {
       setProjectListLoading(false);
+    }
+  };
+
+  const openProjectDetail = async (projectId) => {
+    if (!currentUser) {
+      setError("로그인 후 프로젝트를 다시 열 수 있습니다.");
+      setActiveMenu("AUTH");
+      return;
+    }
+
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/projects/${projectId}?userId=${currentUser.userId}`,
+      );
+
+      if (!response.ok) {
+        const errorMessage = await getErrorMessage(
+          response,
+          "프로젝트를 다시 열지 못했습니다.",
+        );
+
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+
+      setProject(data.project);
+      setUploadedImages(data.uploadedImages || []);
+      setConvertedImages(data.convertedImages || []);
+      setRepresentativeResult(null);
+      setValidationResult(null);
+      setSelectedOrder(1);
+
+      if (data.project?.targetPlatform) {
+        if (data.project.targetPlatform === "MOHEEM_PLUS") {
+          setSelectedPlatform("MOHEEM");
+          setMoheemPackType("PLUS");
+        } else if (data.project.targetPlatform === "MOHEEM_BASIC") {
+          setSelectedPlatform("MOHEEM");
+          setMoheemPackType("BASIC");
+        } else {
+          setSelectedPlatform(data.project.targetPlatform);
+        }
+      }
+
+      setActiveMenu("CREATE");
+      setMessage("기존 프로젝트를 다시 열었습니다.");
+    } catch (err) {
+      setError(err.message);
     }
   };
 
@@ -1928,15 +1980,25 @@ function ProjectListSection({
                   <strong>
                     #{item.id} {item.projectName}
                   </strong>
+
                   <p style={styles.projectListText}>
                     캐릭터: {item.characterName || "-"} / 플랫폼:{" "}
                     {item.targetPlatform || "-"} / 상태: {item.status || "-"}
                   </p>
+
                   <p style={styles.projectListDate}>
                     생성일:{" "}
                     {item.createdAt ? item.createdAt.replace("T", " ") : "-"}
                   </p>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => openProjectDetail(item.id)}
+                  style={styles.openProjectButton}
+                >
+                  다시 열기
+                </button>
               </div>
             ))}
           </div>
@@ -2175,17 +2237,20 @@ const styles = {
     flexWrap: "wrap",
   },
   menuTabButton: {
-    minWidth: "150px",
+    minWidth: "140px",
     padding: "14px 22px",
-    border: "2px solid #eed7df",
+    borderWidth: "2px",
+    borderStyle: "solid",
+    borderColor: "#eed7df",
     borderRadius: "999px",
-    backgroundColor: "#ffffff",
+    background: "#ffffff",
     color: "#5f5552",
     fontSize: "16px",
     fontWeight: "900",
     cursor: "pointer",
     boxShadow: "0 5px 12px rgba(235, 210, 218, 0.14)",
   },
+
   menuTabButtonActive: {
     background: "linear-gradient(135deg, #ff9fbe 0%, #d3a7ff 100%)",
     color: "#ffffff",
@@ -2756,8 +2821,24 @@ const styles = {
   projectListItem: {
     padding: "16px",
     border: "1.5px solid #f2d5df",
-    borderRadius: "16px",
+    borderRadius: "18px",
     backgroundColor: "#fffafc",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "12px",
+    flexWrap: "wrap",
+  },
+
+  openProjectButton: {
+    marginTop: "8px",
+    padding: "10px 16px",
+    border: "2px solid #d7b1ff",
+    borderRadius: "14px",
+    background: "linear-gradient(135deg, #fff8fb 0%, #f6edff 100%)",
+    color: "#805ab8",
+    fontWeight: "900",
+    cursor: "pointer",
   },
   projectListText: {
     margin: "6px 0 0",
